@@ -1,0 +1,8 @@
+name: vit_base_patch16_224.orig_in21k
+task: classification
+source: timm
+pretrained: true
+num_classes: 2
+input_channels: 3
+input_size: [224, 224]
+notes: Original ImageNet-21k backbone; new randomly initialized two-class head.

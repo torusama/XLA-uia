@@ -1,0 +1,11 @@
+name: fracatlas
+root: data/raw/fracatlas
+task: classification
+class_names: [non-fracture, fracture]
+metadata_file: TODO_VERIFY
+annotations_dir: TODO_VERIFY
+split:
+  strategy: TODO_VERIFY
+  seed: 42
+input_size: [224, 224]
+normalization: TODO_VERIFY

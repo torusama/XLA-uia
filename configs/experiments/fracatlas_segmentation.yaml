@@ -1,0 +1,11 @@
+experiment_name: fracatlas_segmentation
+dataset_config: configs/datasets/fracatlas_segmentation.yaml
+model_config: configs/models/efficientvit_seg.yaml
+seed: 42
+device: auto
+output_dir: outputs
+batch_size: 8
+num_workers: 0
+learning_rate: 0.0001
+epochs: 10
+metrics: [dice, iou]

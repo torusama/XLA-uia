@@ -1,0 +1,8 @@
+name: efficientvit_seg
+task: segmentation
+source: mit-han-lab/efficientvit
+pretrained: false
+num_classes: TODO_VERIFY
+input_channels: 3
+input_size: [224, 224]
+notes: TODO_VERIFY

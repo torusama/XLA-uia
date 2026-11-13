@@ -1,0 +1,7 @@
+# ViT-B/16: ???ng ?i tensor
+
+Trong Google [models_vit.py](https://github.com/google-research/vision_transformer/blob/main/vit_jax/models_vit.py), `VisionTransformer` t?o patch embeddings v? CLS; `Encoder` c?ng learned position embeddings r?i g?i c?c `Encoder1DBlock`. ? [timm vision_transformer.py](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py), `VisionTransformer` d?ng `PatchEmbed`, `_pos_embed`, c?c `Block`, `forward_features` v? `forward_head`. Adapter nh?m ? `src/xla/models/vit.py` g?i `timm.create_model`, kh?ng t? implement backbone.
+
+V?i input RGB [B,3,224,224], patch 16 t?o 14?14=196 token, gh?p CLS th?nh [B,197,768], c?ng positional embedding, ?i qua 12 block, m?i block 12 head. M?i head c? chi?u 64; Q/K/V c? d?ng [B,12,197,64], attention softmax(QK?/?64)V, ??u ra gh?p th?nh [B,197,768]. Block d?ng LayerNorm, residual, attention v? MLP/GELU. CLS cu?i [B,768] qua head m?i cho logits [B,2]. Khi ??i ?? ph?n gi?i c?n x? l? positional embedding; c?u h?nh hi?n kh?a 224.
+
+Th?nh ph?n attention c? chi ph? O(N?d), attention matrix O(N?) m?i head (fused kernel c? th? thay ??i b? nh? th?c t?); kh?ng suy ra latency th?c t?. Cross-entropy t?i ?u loss li?n t?c, kh?ng tr?c ti?p t?i ?u macro-F1. ?nh X-quang c? r?i ro crop m?t v?ng g?y, bi?n d?ng t? l?, imbalance, tr?ng ?nh v? domain shift. So s?nh EfficientViT c?n c?ng task, split, device v? protocol; b?o ri?ng resolution, ngu?n pretrained, params, MACs, latency. Training ch?a ???c c?i theo ph?m vi hi?n t?i.

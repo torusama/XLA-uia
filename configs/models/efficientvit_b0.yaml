@@ -1,0 +1,8 @@
+name: efficientvit_b0
+task: classification
+source: mit-han-lab/efficientvit
+pretrained: false
+num_classes: 2
+input_channels: 3
+input_size: [224, 224]
+notes: TODO_VERIFY
