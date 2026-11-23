@@ -11,7 +11,7 @@ dependencies = ["PyYAML>=6"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.4"]
-vit = ["torch>=2", "torchvision", "timm>=1.0", "Pillow"]
+vit = ["torch>=2", "torchvision", "timm>=1.0", "Pillow", "einops>=0.7,<1"]
 
 [tool.hatch.build]
 dev-mode-exact = true

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f8f6">
+  <title>BoneScope — BTXRD segmentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-word">bone<span>scope</span></span><span class="brand-caption">X-RAY RESEARCH LAB</span></div>
+    <div class="side-section">KHÔNG GIAN LÀM VIỆC</div>
+    <nav class="navigation" aria-label="Chọn trang">
+      <button class="nav-item active" data-tab="vit" aria-current="page"><span>ViT</span><span class="nav-sub">Vision Transformer</span></button>
+      <button class="nav-item" data-tab="efficientvit"><span>EfficientViT</span><span class="nav-sub">Efficient Vision Transformer</span></button>
+      <button class="nav-item" data-tab="statistics"><span>So sánh</span><span class="nav-sub">Hai mô hình · cùng một ảnh</span></button>
+    </nav>
+    <div class="sidebar-bottom"><span class="eyebrow">SEMINAR PROJECT</span><p>Nhìn sâu hơn<br>vào ảnh X-quang.</p><span>BTXRD / TEST SET</span></div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><div class="breadcrumb">DỰ ÁN SEMINAR <span>/</span> <strong id="breadcrumb">VIT</strong></div><div class="top-meta"><span>BTXRD DATASET</span><span class="top-divider"></span><span>PHÂN VÙNG ẢNH</span></div></header>
+    <section class="page">
+      <div class="page-heading"><div><div class="section-label"><span class="green-line"></span> KHÔNG GIAN PHÂN TÍCH</div><h1 id="page-title">Vision Transformer<span class="title-period">.</span></h1><p id="page-description" class="page-description">Khám phá vùng tổn thương trên ảnh X-quang.</p></div><div class="model-badge"><span>TẬP DỮ LIỆU</span><strong>BTXRD · Test</strong></div></div>
+      <section class="sample-bar" aria-label="Chọn ảnh">
+        <div class="sample-details"><span class="field-label">ẢNH X-QUANG ĐANG XEM</span><div class="sample-name"><strong id="sample-name">Đang tải dữ liệu...</strong><span id="sample-label"></span></div><p id="sample-position">Tập test BTXRD</p></div>
+        <div class="sample-controls"><button id="previous" class="secondary-button" disabled>Ảnh trước</button><button id="next" class="secondary-button" disabled>Ảnh tiếp theo</button></div>
+      </section>
+      <div id="notice" class="notice" role="status" aria-live="polite"></div>
+
+      <section id="model-view" aria-label="Kết quả của mô hình">
+        <div class="scan-grid">
+          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">ẢNH ĐẦU VÀO</span><h2>Ảnh X-quang</h2></div><span class="panel-tag">BTXRD</span></div><div class="scan-stage"><img class="sample-image" alt="Ảnh X-quang của mẫu đang xem"><p class="stage-placeholder">Chưa có ảnh</p></div><p class="scan-caption">Ảnh gốc trong tập test.</p></article>
+          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">GROUND TRUTH</span><h2>Vùng gán nhãn</h2></div><span class="panel-tag">MASK THẬT</span></div><div class="scan-stage"><img class="truth-image" alt="Ground truth của mẫu đang xem"><p class="stage-placeholder">Chưa có mask</p></div><p class="scan-caption">Vùng trắng là tổn thương được gán nhãn.</p></article>
+          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">DỰ ĐOÁN</span><h2 id="result-title">Kết quả ViT</h2></div><span class="result-tag" id="model-result-status">CHƯA SẴN SÀNG</span></div><div class="scan-stage"><div class="model-layer" id="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang"><img id="model-mask" class="mask-overlay" alt="Mask mô hình dự đoán"></div><div class="stage-message" id="model-message">Mô hình chưa được kết nối.</div></div><p class="scan-caption">Vùng màu là mask mô hình dự đoán.</p></article>
+        </div>
+        <section class="model-summary"><div><span class="field-label">TRẠNG THÁI MÔ HÌNH</span><p id="model-status">Đang kiểm tra...</p></div><div><span class="field-label">DICE · ẢNH NÀY</span><p id="model-dice">—</p></div><div><span class="field-label">IOU · ẢNH NÀY</span><p id="model-iou">—</p></div><div><span class="field-label">SUY LUẬN</span><p id="model-time">—</p></div></section>
+      </section>
+
+      <section id="stats-view" aria-label="So sánh hai mô hình" hidden>
+        <div class="compare-heading"><div><span class="panel-kicker">CÙNG ẢNH, CÙNG GROUND TRUTH</span><h2>So sánh trực quan</h2><p>Đổi ảnh để chạy lại cả hai mô hình và cập nhật các chỉ số.</p></div><span class="data-note" id="comparison-status">Chưa có kết quả</span></div>
+        <div class="compare-grid">
+          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">ẢNH ĐẦU VÀO</span><h2>Ảnh X-quang</h2></div></div><div class="scan-stage"><img class="sample-image" alt="Ảnh X-quang đang so sánh"><p class="stage-placeholder">Chưa có ảnh</p></div></article>
+          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">GROUND TRUTH</span><h2>Vùng gán nhãn</h2></div></div><div class="scan-stage"><img class="truth-image" alt="Ground truth đang so sánh"><p class="stage-placeholder">Chưa có mask</p></div></article>
+          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">DỰ ĐOÁN</span><h2>ViT</h2></div></div><div class="scan-stage"><div id="compare-vit-layer" class="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang"><img id="compare-vit-mask" class="mask-overlay" alt="Mask ViT"></div><div class="stage-message" id="compare-vit-message">Chưa kết nối</div></div></article>
+          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">DỰ ĐOÁN</span><h2>EfficientViT</h2></div></div><div class="scan-stage"><div id="compare-efficientvit-layer" class="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang"><img id="compare-efficientvit-mask" class="mask-overlay" alt="Mask EfficientViT"></div><div class="stage-message" id="compare-efficientvit-message">Chưa kết nối</div></div></article>
+        </div>
+        <div class="comparison-panel"><div class="comparison-heading"><div><span class="panel-kicker">ĐO TRÊN ẢNH ĐANG XEM</span><h2>Chỉ số & chi phí tính toán</h2></div><span>SEGMENTATION · BTXRD</span></div><div class="chart-grid" id="chart-grid"></div><div class="table-wrap"><table><thead><tr><th>CHỈ SỐ</th><th>ViT</th><th>EfficientViT</th><th>Ý NGHĨA</th></tr></thead><tbody id="metrics-table"></tbody></table></div><p class="table-note">Dice và IoU tính trên ảnh đang xem; cùng mask rỗng được tính là 1. Thời gian là một lượt suy luận trên thiết bị hiện tại, có thể thay đổi. GFLOPs chỉ hiển thị khi đã đo; không phải kết quả đánh giá toàn bộ test.</p></div>
+      </section>
+      <footer class="footer"><span>BTXRD · SEMINAR XỬ LÝ ẢNH</span><span>CÔNG CỤ NGHIÊN CỨU VÀ TRÌNH BÀY</span></footer>
+    </section>
+  </main>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
