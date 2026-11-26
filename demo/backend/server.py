@@ -73,6 +73,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vit-checkpoint", type=Path,
                         default=os.environ.get("XLA_VIT_CHECKPOINT"))
+    parser.add_argument("--efficientvit-checkpoint", type=Path,
+                        default=os.environ.get("XLA_EFFICIENTVIT_CHECKPOINT"))
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
     try:
@@ -80,7 +82,8 @@ def main():
     except (OSError, ValueError, KeyError) as exc:
         DemoHandler.dataset_error = str(exc)
         print(f"BTXRD unavailable: {exc}", flush=True)
-    DemoHandler.registry = ModelRegistry(args.vit_checkpoint)
+    DemoHandler.registry = ModelRegistry(args.vit_checkpoint,
+                                        args.efficientvit_checkpoint)
     handler = partial(DemoHandler, directory=str(ROOT / "demo/frontend"))
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     print(f"Demo available at http://127.0.0.1:{args.port}", flush=True)
