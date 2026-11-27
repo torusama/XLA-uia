@@ -63,8 +63,74 @@ def test_inference_uses_actual_mask_and_parameters():
     result = registry.infer("vit", Image.new("RGB", (16, 16)), Image.new("L", (16, 16), 255))
     assert result["dice"] == result["iou"] == 1
     assert result["latency_ms"] >= 0 and result["params_m"] > 0
+    assert result["gflops"] == pytest.approx(16 * 16 * 3 * 2 / 1e9)
+    assert result["gflops_error"] is None
     assert result["mask_url"].startswith("data:image/png;base64,")
     assert registry.infer("efficientvit", None, None)["ready"] is False
+
+
+def test_flop_profile_is_cached_separately_from_prediction():
+    class CountedConv(nn.Conv2d):
+        calls = 0
+
+        def forward(self, tensor):
+            self.calls += 1
+            return super().forward(tensor)
+
+    registry = ModelRegistry()
+    model = CountedConv(3, 1, 1).eval()
+    registry.models["vit"] = model
+    registry.device = torch.device("cpu")
+    image, mask = Image.new("RGB", (16, 16)), Image.new("L", (16, 16))
+    first = registry.infer("vit", image, mask)
+    second = registry.infer("vit", image, mask)
+    assert first["gflops"] == second["gflops"] > 0
+    assert model.calls == 3
+
+
+def test_vit_threshold_does_not_change_efficientvit_threshold():
+    registry = ModelRegistry(vit_threshold=0.8)
+    model = nn.Conv2d(3, 1, 1)
+    with torch.no_grad():
+        model.weight.zero_()
+        model.bias.fill_(0.405465)
+    registry.models = {"vit": model.eval(), "efficientvit": model.eval()}
+    registry.device = torch.device("cpu")
+    image = Image.new("RGB", (16, 16))
+    mask = Image.new("L", (16, 16), 255)
+    assert registry.infer("vit", image, mask)["dice"] == 0
+    assert registry.infer("efficientvit", image, mask)["dice"] == 1
+
+
+def test_efficientvit_factory_keeps_installed_files_unchanged():
+    import hashlib
+    import importlib.util
+    from pathlib import Path
+
+    from demo.backend.models import _load_efficientvit_factory
+
+    spec = importlib.util.find_spec("efficientvit")
+    if spec is None or not spec.submodule_search_locations:
+        pytest.skip("EfficientViT dependency is not installed")
+    root = Path(spec.submodule_search_locations[0])
+    files = [root / "models/nn/__init__.py", root / "models/efficientvit/__init__.py"]
+    before = [hashlib.sha256(path.read_bytes()).digest() for path in files]
+    factory = _load_efficientvit_factory()
+    model = factory(name="efficientvit-seg-b1-ade20k", pretrained=False)
+    assert sum(parameter.numel() for parameter in model.parameters()) > 0
+    assert before == [hashlib.sha256(path.read_bytes()).digest() for path in files]
+
+
+def test_inference_respects_selected_threshold():
+    registry = ModelRegistry(vit_threshold=0.8)
+    model = nn.Conv2d(3, 1, 1)
+    with torch.no_grad():
+        model.weight.zero_()
+        model.bias.fill_(1)
+    registry.models["vit"] = model.eval()
+    registry.device = torch.device("cpu")
+    result = registry.infer("vit", Image.new("RGB", (16, 16)), Image.new("L", (16, 16), 255))
+    assert result["dice"] == result["iou"] == 0
 
 
 def test_checkpoint_load_checks_dataset_and_model(tmp_path, monkeypatch):
@@ -87,6 +153,17 @@ def test_load_segmenter_checkpoint(tmp_path, monkeypatch):
     torch.save({"model": nn.Conv2d(3, 1, 1).state_dict(),
                 "archive_sha256": EXPECTED_ARCHIVE_SHA256,
                 "settings": {"architecture": "segmenter_vit_mask_transformer"}}, checkpoint)
+    assert ModelRegistry(checkpoint).statuses()["vit"]["ready"]
+
+
+def test_load_official_segmenter_checkpoint(tmp_path, monkeypatch):
+    from xla.models import segmenter_official
+
+    monkeypatch.setattr(segmenter_official, "OfficialSegmenter", lambda **kwargs: nn.Conv2d(3, 2, 1))
+    checkpoint = tmp_path / "segmenter.pt"
+    torch.save({"model": nn.Conv2d(3, 2, 1).state_dict(),
+                "archive_sha256": EXPECTED_ARCHIVE_SHA256,
+                "settings": {"architecture": "segmenter_official_mask_transformer"}}, checkpoint)
     assert ModelRegistry(checkpoint).statuses()["vit"]["ready"]
 
 

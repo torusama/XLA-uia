@@ -1,89 +1,82 @@
 """Optional model inference and per-image comparison measurements."""
 import base64
-import importlib.machinery
+import hashlib
+import importlib
 import importlib.util
+import platform
+import sys
 import threading
 import time
+import types
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .dataset import EXPECTED_ARCHIVE_SHA256, png_bytes
+from .resources import ResourceMonitor
 
 
-def _patch_efficientvit_package():
-    """Keep the EfficientViT import path limited to segmentation needs."""
-    try:
-        spec = importlib.util.find_spec("efficientvit")
-        if spec is None or not spec.submodule_search_locations:
-            return
-        root = Path(spec.submodule_search_locations[0])
-        nn_init = root / "models" / "nn" / "__init__.py"
-        if nn_init.exists():
-            nn_init.write_text(
-                "from .act import *\nfrom .norm import *\nfrom .ops import *\nfrom .triton_rms_norm import *\n",
-                encoding="utf-8",
-            )
-        evit_init = root / "models" / "efficientvit" / "__init__.py"
-        if evit_init.exists():
-            evit_init.write_text("from .backbone import *\nfrom .seg import *\n", encoding="utf-8")
-    except OSError:
-        pass
+def checkpoint_digest(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
-def _ensure_triton_mock():
-    """Allow efficientvit imports on environments without the triton package."""
-    try:
-        import triton  # noqa: F401
-        import triton.language  # noqa: F401
-        return
-    except Exception:
-        pass
-    import sys
-    import types
+def _load_efficientvit_factory():
+    """Import only segmentation components without modifying installed files."""
+    if "efficientvit.seg_model_zoo" in sys.modules:
+        return sys.modules["efficientvit.seg_model_zoo"].create_efficientvit_seg_model
+    spec = importlib.util.find_spec("efficientvit")
+    if spec is None or not spec.submodule_search_locations:
+        raise ImportError("Install the EfficientViT segmentation dependency")
+    root = Path(spec.submodule_search_locations[0])
+    importlib.import_module("efficientvit.models")
 
-    def _make_module(name):
+    def namespace(name, directory):
         module = types.ModuleType(name)
-        module.__path__ = []
-        module.__spec__ = importlib.machinery.ModuleSpec(name, None)
+        module.__path__ = [str(directory)]
+        module.__package__ = name
+        module.__spec__ = importlib.machinery.ModuleSpec(name, loader=None, is_package=True)
         sys.modules[name] = module
         return module
 
-    _triton = _make_module("triton")
-    _triton_language = _make_module("triton.language")
-    _triton.backends = _make_module("triton.backends")
-    _triton.backends.compiler = _make_module("triton.backends.compiler")
-    _triton.compiler = _make_module("triton.compiler")
-    _triton.compiler.compiler = _make_module("triton.compiler.compiler")
-    _triton.language = _triton_language
-    _triton.backends = _triton.backends
-    for _name, _value in {
-        "jit": lambda fn=None, **kwargs: (fn if fn is not None else (lambda x: x)),
-        "cdiv": lambda a, b: (a + b - 1) // b,
-        "next_power_of_2": lambda x: 1 << (x - 1).bit_length(),
-    }.items():
-        setattr(_triton, _name, _value)
-    for _name, _value in {
-        "constexpr": object,
-        "dtype": object,
-        "program_id": lambda *args, **kwargs: 0,
-        "arange": lambda *args, **kwargs: None,
-        "zeros": lambda *args, **kwargs: None,
-        "float32": float,
-        "load": lambda *args, **kwargs: None,
-        "store": lambda *args, **kwargs: None,
-        "where": lambda *args, **kwargs: None,
-        "sum": lambda *args, **kwargs: None,
-    }.items():
-        setattr(_triton_language, _name, _value)
+    nn_package = namespace("efficientvit.models.nn", root / "models" / "nn")
+    if importlib.util.find_spec("triton") is None:
+        triton_module = types.ModuleType("efficientvit.models.nn.triton_rms_norm")
+
+        class UnsupportedTritonRMSNorm:
+            @staticmethod
+            def apply(*args, **kwargs):
+                raise RuntimeError("Triton RMSNorm is unavailable; this adapter only supports B1")
+
+        triton_module.TritonRMSNorm2dFunc = UnsupportedTritonRMSNorm
+        sys.modules[triton_module.__name__] = triton_module
+    for name in ("act", "norm", "ops"):
+        module = importlib.import_module(f"efficientvit.models.nn.{name}")
+        for exported in module.__all__:
+            setattr(nn_package, exported, getattr(module, exported))
+    model_package = namespace("efficientvit.models.efficientvit", root / "models" / "efficientvit")
+    for name in ("backbone", "seg"):
+        module = importlib.import_module(f"efficientvit.models.efficientvit.{name}")
+        for exported in module.__all__:
+            setattr(model_package, exported, getattr(module, exported))
+    return importlib.import_module("efficientvit.seg_model_zoo").create_efficientvit_seg_model
 
 
 class ModelRegistry:
     """Load ViT and EfficientViT checkpoints for the demo."""
 
-    def __init__(self, vit_checkpoint=None, efficientvit_checkpoint=None):
+    def __init__(self, vit_checkpoint=None, efficientvit_checkpoint=None, vit_threshold=0.5):
+        if not 0 < vit_threshold < 1:
+            raise ValueError("vit_threshold must be between 0 and 1")
+        self.vit_threshold = vit_threshold
         self.models = {}
         self.errors = {"vit": "Chưa có checkpoint ViT.",
                        "efficientvit": "EfficientViT chưa được tích hợp."}
         self.lock = threading.Lock()
+        self.complexity_cache = {}
+        self.model_metadata = {}
         self.device = None
         if vit_checkpoint:
             self._load_vit(Path(vit_checkpoint))
@@ -101,7 +94,12 @@ class ModelRegistry:
             if architecture == "segmenter_vit_mask_transformer":
                 from xla.models.segmenter_vit import SegmenterViT
 
-                model = SegmenterViT(pretrained=False)
+                mask_norm_eps = checkpoint.get("settings", {}).get("mask_norm_eps", 1e-5)
+                model = SegmenterViT(pretrained=False, mask_norm_eps=mask_norm_eps)
+            elif architecture == "segmenter_official_mask_transformer":
+                from xla.models.segmenter_official import OfficialSegmenter
+
+                model = OfficialSegmenter(pretrained=False)
             elif architecture is None:
                 from xla.models.vit_segmentation import ViTSegmentation
 
@@ -112,18 +110,17 @@ class ModelRegistry:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             model = model.to(self.device).eval()
             self.models["vit"] = model
+            self.model_metadata["vit"] = {"checkpoint_sha256": checkpoint_digest(checkpoint_path),
+                                           "architecture": architecture or "vit_conv_head"}
             self.errors.pop("vit", None)
         except (OSError, ValueError, RuntimeError, KeyError, ImportError) as exc:
             self.errors["vit"] = f"Không thể nạp checkpoint ViT: {exc}"
 
     def _load_efficientvit(self, checkpoint_path):
         try:
-            _patch_efficientvit_package()
-            _ensure_triton_mock()
+            create_efficientvit_seg_model = _load_efficientvit_factory()
             import torch
-            import torch.nn as nn
-
-            from efficientvit.seg_model_zoo import create_efficientvit_seg_model
+            from torch import nn
 
             state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
             if isinstance(state_dict, dict) and "model" in state_dict:
@@ -152,6 +149,9 @@ class ModelRegistry:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             model = model.to(self.device).eval()
             self.models["efficientvit"] = model
+            self.model_metadata["efficientvit"] = {
+                "checkpoint_sha256": checkpoint_digest(checkpoint_path),
+                "architecture": "efficientvit_seg_b1"}
             self.errors.pop("efficientvit", None)
         except (OSError, ValueError, RuntimeError, KeyError, ImportError) as exc:
             self.errors["efficientvit"] = f"Không thể nạp checkpoint EfficientViT: {exc}"
@@ -159,6 +159,20 @@ class ModelRegistry:
     def statuses(self):
         return {name: {"ready": name in self.models, "message": self.errors.get(name, "Sẵn sàng")}
                 for name in ("vit", "efficientvit")}
+
+    def _profile_gflops(self, model, tensor):
+        """Count supported forward operations once per model and input shape."""
+        from torch.utils.flop_counter import FlopCounterMode
+
+        key = (id(model), tuple(tensor.shape), str(tensor.dtype), str(tensor.device))
+        if key not in self.complexity_cache:
+            with FlopCounterMode(display=False) as counter:
+                model(tensor)
+            total = counter.get_total_flops()
+            if total <= 0:
+                raise RuntimeError("No supported floating-point operations were counted")
+            self.complexity_cache[key] = total / 1_000_000_000
+        return self.complexity_cache[key]
 
     def infer(self, name, image, ground_truth):
         if name not in self.models:
@@ -175,14 +189,34 @@ class ModelRegistry:
             tensor = TF.normalize(TF.to_tensor(image), (0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         tensor = tensor.unsqueeze(0).to(self.device)
         with self.lock, torch.inference_mode():
+            try:
+                gflops = self._profile_gflops(model, tensor)
+                gflops_error = None
+            except (ImportError, RuntimeError, NotImplementedError) as exc:
+                gflops = None
+                gflops_error = str(exc)
             if self.device.type == "cuda":
                 torch.cuda.synchronize(self.device)
-            start = time.perf_counter()
-            logits = model(tensor)
+            gpu_baseline = None
             if self.device.type == "cuda":
-                torch.cuda.synchronize(self.device)
-            latency_ms = (time.perf_counter() - start) * 1000
-        prediction = logits[0, 0].sigmoid().ge(0.5).cpu().numpy()
+                gpu_baseline = torch.cuda.memory_allocated(self.device)
+                torch.cuda.reset_peak_memory_stats(self.device)
+            started_at = datetime.now(timezone.utc).isoformat()
+            with ResourceMonitor() as monitor:
+                start = time.perf_counter()
+                logits = model(tensor)
+                if self.device.type == "cuda":
+                    torch.cuda.synchronize(self.device)
+                latency_ms = (time.perf_counter() - start) * 1000
+            resources = monitor.metrics(latency_ms)
+            gpu_peak = torch.cuda.max_memory_allocated(self.device) if gpu_baseline is not None else None
+            resources.update(gpu_peak_mb=gpu_peak / 1024**2 if gpu_peak is not None else None,
+                             gpu_delta_mb=(gpu_peak - gpu_baseline) / 1024**2
+                             if gpu_peak is not None else None)
+        probabilities = (logits[0].softmax(dim=0)[1] if logits.shape[1] == 2
+                         else logits[0, 0].sigmoid())
+        threshold = self.vit_threshold if name == "vit" else 0.5
+        prediction = probabilities.ge(threshold).cpu().numpy()
         truth = np.asarray(ground_truth) > 0
         tp = int((prediction & truth).sum())
         fp = int((prediction & ~truth).sum())
@@ -193,6 +227,18 @@ class ModelRegistry:
         overlay[prediction] = [255, 103, 78, 180]
         encoded = base64.b64encode(png_bytes(Image.fromarray(overlay, "RGBA"))).decode("ascii")
         return {"ready": True, "mask_url": f"data:image/png;base64,{encoded}",
-                "dice": dice, "iou": iou, "latency_ms": latency_ms,
+                "inference_started_at": started_at, **resources,
+                "dice": dice, "iou": iou, "tp": tp, "fp": fp, "fn": fn, "latency_ms": latency_ms,
                 "params_m": sum(p.numel() for p in model.parameters()) / 1_000_000,
-                "gflops": None, "device": str(self.device)}
+                "gflops": gflops, "gflops_error": gflops_error,
+                "gflops_method": "PyTorch forward FLOPs; multiply-add=2; supported operators only",
+                "measurement_config": {**self.model_metadata.get(name, {}),
+                                       "dataset_sha256": EXPECTED_ARCHIVE_SHA256,
+                                       "threshold": threshold, "input_shape": list(tensor.shape),
+                                       "device": str(self.device), "dtype": str(tensor.dtype),
+                                       "hardware": torch.cuda.get_device_name(self.device)
+                                       if self.device.type == "cuda" else platform.processor(),
+                                       "torch_version": str(torch.__version__),
+                                       "torch_threads": torch.get_num_threads(),
+                                       "measurement_version": 2},
+                "device": str(self.device)}

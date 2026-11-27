@@ -9,7 +9,7 @@ from xla.vendor.segmenter.decoder import MaskTransformer
 class SegmenterViT(nn.Module):
     """Binary segmentation using two Segmenter class tokens."""
 
-    def __init__(self, pretrained: bool = True):
+    def __init__(self, pretrained: bool = True, mask_norm_eps: float = 1e-5):
         super().__init__()
         self.backbone = build_vit(pretrained=pretrained, num_classes=2)
         self.backbone.reset_classifier(0)
@@ -19,6 +19,7 @@ class SegmenterViT(nn.Module):
             n_heads=dim // 64, d_model=dim, d_ff=4 * dim,
             drop_path_rate=0.0, dropout=0.1,
         )
+        self.decoder.mask_norm.eps = mask_norm_eps
 
     def forward(self, images):
         tokens = self.backbone.forward_features(images)

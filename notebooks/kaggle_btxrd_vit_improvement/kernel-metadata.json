@@ -1,0 +1,16 @@
+{
+  "id": "vtan2405/xla-btxrd-vit-improvement-ab-20-epochs",
+  "title": "XLA BTXRD ViT Improvement AB 20 Epochs",
+  "code_file": "vit_improvement_ab.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "vtan2405/xla-btxrd-segmenter-weight-50"
+  ],
+  "model_sources": []
+}

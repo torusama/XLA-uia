@@ -64,6 +64,10 @@ Notebook [BTXRD ViT segmentation](notebooks/kaggle_btxrd_vit/btxrd_vit_segmentat
 
 ## Giao diện demo
 
+Tab **So sánh** có từng panel riêng cho thời gian, tốc độ, Dice/IoU, RAM/CPU, VRAM, tham số và GFLOPs bên dưới bảng chỉ số; mỗi panel có nút **Xem lớn** và bảng số đo chi tiết. Các lượt chạy được lưu bằng SQLite (`outputs/demo_history.sqlite3`) và biểu đồ tự cập nhật. Nút **So sánh toàn bộ 561 ảnh** chỉ chạy khi người dùng bấm, có tiến độ, dừng sau ảnh hiện tại và lọc kết quả theo tác vụ; không tự khởi chạy khi mở web. Cài extra `demo` để đo RAM bằng `psutil`; xem cách dùng và giới hạn phép đo tại [demo/README.md](demo/README.md).
+
+Thử nghiệm cải tiến ViT hiện có hai nhánh fine-tune có đối chứng trên validation; xem [cấu hình và tiêu chí chọn model](docs/vit/improvement_ab.md). Không coi checkpoint mới là tốt hơn cho đến khi đọc kết quả validation.
+
 Chạy `python -m demo.backend.server`, sau đó mở `http://127.0.0.1:8765`. Giao diện lấy ảnh test BTXRD, hiển thị ground truth và cho chuyển ảnh. Có thể nạp checkpoint ViT bằng `--vit-checkpoint`; EfficientViT cần được triển khai trước khi kết nối. Xem [demo/README.md](demo/README.md) để biết cấu trúc, cách chạy và ý nghĩa các chỉ số.
 
 Checkpoint từ job ViT 20 epoch đã tải về `outputs/kaggle_vit_20e/btxrd_vit_20e/best.pt`; Dice validation bằng 0 ở cả 20 epoch. Có thể dùng file này kiểm tra luồng demo, nhưng chưa có kết quả phân vùng tốt.

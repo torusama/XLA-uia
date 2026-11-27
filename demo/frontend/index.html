@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=20261127-tooltip">
 </head>
 <body>
 <div class="app-shell">
@@ -26,7 +26,7 @@
     <header class="topbar"><div class="breadcrumb">DỰ ÁN SEMINAR <span>/</span> <strong id="breadcrumb">VIT</strong></div><div class="top-meta"><span>BTXRD DATASET</span><span class="top-divider"></span><span>PHÂN VÙNG ẢNH</span></div></header>
     <section class="page">
       <div class="page-heading"><div><div class="section-label"><span class="green-line"></span> KHÔNG GIAN PHÂN TÍCH</div><h1 id="page-title">Vision Transformer<span class="title-period">.</span></h1><p id="page-description" class="page-description">Khám phá vùng tổn thương trên ảnh X-quang.</p></div><div class="model-badge"><span>TẬP DỮ LIỆU</span><strong>BTXRD · Test</strong></div></div>
-      <section class="sample-bar" aria-label="Chọn ảnh">
+      <section id="sample-bar" class="sample-bar" aria-label="Chọn ảnh">
         <div class="sample-details"><span class="field-label">ẢNH X-QUANG ĐANG XEM</span><div class="sample-name"><strong id="sample-name">Đang tải dữ liệu...</strong><span id="sample-label"></span></div><p id="sample-position">Tập test BTXRD</p></div>
         <div class="sample-controls"><button id="previous" class="secondary-button" disabled>Ảnh trước</button><button id="next" class="secondary-button" disabled>Ảnh tiếp theo</button></div>
       </section>
@@ -43,6 +43,11 @@
 
       <section id="stats-view" aria-label="So sánh hai mô hình" hidden>
         <div class="compare-heading"><div><span class="panel-kicker">CÙNG ẢNH, CÙNG GROUND TRUTH</span><h2>So sánh trực quan</h2><p>Đổi ảnh để chạy lại cả hai mô hình và cập nhật các chỉ số.</p></div><span class="data-note" id="comparison-status">Chưa có kết quả</span></div>
+        <section class="batch-panel" aria-label="So sánh toàn bộ tập ảnh">
+          <div class="batch-heading"><div><span class="panel-kicker">SO SÁNH HÀNG LOẠT</span><h2>Để hai model chạy qua toàn bộ tập ảnh.</h2><p id="batch-description">Đang kiểm tra tập ảnh và trạng thái model...</p></div><div class="batch-actions"><button id="batch-start" class="primary-button" disabled>So sánh toàn bộ tập ảnh</button><button id="batch-stop" class="secondary-button" hidden>Dừng sau ảnh này</button></div></div>
+          <div id="batch-view" hidden><div class="batch-progress-label"><strong id="batch-status"></strong><span>Chạy ở backend · có thể tải lại trang</span></div><progress id="batch-progress" max="1" value="0"></progress><p id="batch-current" role="status" aria-live="polite"></p></div>
+          <p id="batch-error" class="notice" role="alert" hidden></p>
+        </section>
         <div class="compare-grid">
           <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">ẢNH ĐẦU VÀO</span><h2>Ảnh X-quang</h2></div></div><div class="scan-stage"><img class="sample-image" alt="Ảnh X-quang đang so sánh"><p class="stage-placeholder">Chưa có ảnh</p></div></article>
           <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">GROUND TRUTH</span><h2>Vùng gán nhãn</h2></div></div><div class="scan-stage"><img class="truth-image" alt="Ground truth đang so sánh"><p class="stage-placeholder">Chưa có mask</p></div></article>
@@ -50,11 +55,29 @@
           <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">DỰ ĐOÁN</span><h2>EfficientViT</h2></div></div><div class="scan-stage"><div id="compare-efficientvit-layer" class="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang"><img id="compare-efficientvit-mask" class="mask-overlay" alt="Mask EfficientViT"></div><div class="stage-message" id="compare-efficientvit-message">Chưa kết nối</div></div></article>
         </div>
         <div class="comparison-panel"><div class="comparison-heading"><div><span class="panel-kicker">ĐO TRÊN ẢNH ĐANG XEM</span><h2>Chỉ số & chi phí tính toán</h2></div><span>SEGMENTATION · BTXRD</span></div><div class="chart-grid" id="chart-grid"></div><div class="table-wrap"><table><thead><tr><th>CHỈ SỐ</th><th>ViT</th><th>EfficientViT</th><th>Ý NGHĨA</th></tr></thead><tbody id="metrics-table"></tbody></table></div><p class="table-note">Dice và IoU tính trên ảnh đang xem; cùng mask rỗng được tính là 1. Thời gian là một lượt suy luận trên thiết bị hiện tại, có thể thay đổi. GFLOPs chỉ hiển thị khi đã đo; không phải kết quả đánh giá toàn bộ test.</p></div>
+      <section id="history-view" aria-label="Thống kê qua các ảnh đã phân vùng">
+        <div class="analytics-heading"><div><span class="panel-kicker">HIỆU SUẤT QUA TỪNG LƯỢT CHẠY</span><h2>Mỗi chỉ số. Một góc nhìn.</h2><p>Đổi ảnh để cập nhật đồng thời các biểu đồ của ViT và EfficientViT.</p></div><span class="live-label">Tự động lưu & cập nhật</span></div>
+        <div class="analytics-overview"><div class="analytics-overview-main"><span class="field-label">DỮ LIỆU SO SÁNH</span><strong id="history-count">Đang tải số đo</strong><span id="history-range">Các lượt chạy được lưu ở backend</span></div><div class="overview-stat"><strong id="history-pairs">0</strong><span>Cặp so sánh</span></div><div class="overview-stat"><strong id="history-images">0</strong><span>Ảnh khác nhau</span></div><div class="model-legend"><span class="legend-vit">ViT</span><span class="legend-efficientvit">EfficientViT</span></div></div>
+        <div class="history-toolbar">
+          <label>Phiên chạy<select id="history-session"><option value="all">Tất cả phiên</option><option value="current">Phiên hiện tại</option></select></label>
+          <label>Khoảng thời gian<select id="history-hours"><option value="0">Tất cả</option><option value="1">1 giờ gần đây</option><option value="24">24 giờ gần đây</option></select></label>
+          <label>Số lượt gần nhất<select id="history-limit"><option value="200">200</option><option value="500">500</option><option value="1000">1000</option><option value="2000">2.000 · đủ toàn bộ tập</option></select></label>
+          <label>Lượt chạy hàng loạt<select id="history-batch"><option value="">Tất cả lượt so sánh</option></select></label>
+          <label>Trục biểu đồ<select id="history-axis"><option value="runs">Theo lượt chạy</option><option value="time">Theo thời gian</option></select></label>
+          <button id="history-refresh" class="secondary-button">Làm mới</button>
+          <a id="history-csv" class="secondary-button" download="segmentation-history.csv">Tải CSV</a>
+        </div>
+        <div class="analytics-caption"><span>Mỗi panel thể hiện một độ đo riêng. Di chuột vào điểm để xem ảnh và thời điểm chạy.</span><span id="history-updated" class="data-note"></span></div>
+        <div id="history-connection" class="notice" role="status" hidden></div>
+        <div id="history-charts" class="timeline-grid"></div>
+        <div class="comparison-panel"><div class="comparison-heading"><h2>Tổng hợp các lượt đã lưu</h2></div><div class="table-wrap"><table class="history-table"><thead><tr><th>MODEL / CẤU HÌNH</th><th>LƯỢT</th><th>ẢNH KHÁC NHAU</th><th>TB ms</th><th>TRUNG VỊ ms</th><th>P95 ms</th><th>ẢNH/s</th><th>TB DICE</th><th>TB IOU</th><th>DICE PIXEL</th><th>IOU PIXEL</th><th>TB RAM MiB</th><th>TB RAM TĂNG MiB</th><th>TB LÕI CPU</th><th>TB VRAM TĂNG MiB</th><th>THAM SỐ M</th><th>GFLOPs</th></tr></thead><tbody id="history-summary"></tbody></table></div><p class="table-note">RAM là RSS của tiến trình server chứa cả hai model, lấy mẫu mỗi 10 ms; mức tăng chỉ là ước tính bộ nhớ thêm trong forward. CUDA trả bộ nhớ tensor được PyTorch cấp phát, không phải toàn bộ VRAM của thiết bị. Không có phép đo điện năng hoặc GPU utilization.</p></div>
+      </section>
       </section>
       <footer class="footer"><span>BTXRD · SEMINAR XỬ LÝ ẢNH</span><span>CÔNG CỤ NGHIÊN CỨU VÀ TRÌNH BÀY</span></footer>
     </section>
   </main>
 </div>
-<script type="module" src="./app.js"></script>
+<dialog id="chart-dialog" aria-labelledby="chart-dialog-title"><div class="chart-dialog-shell"><header class="chart-dialog-header"><div><span class="panel-kicker">XEM CHI TIẾT BIỂU ĐỒ</span><h2 id="chart-dialog-title">Biểu đồ</h2></div><button id="chart-dialog-close" class="secondary-button" autofocus>Đóng</button></header><div class="chart-dialog-controls"><label>Phạm vi hiển thị<select id="detail-window"><option value="0">Tất cả số đo đang lọc</option><option value="20">20 cặp gần nhất</option><option value="50">50 cặp gần nhất</option></select></label><span id="detail-count"></span></div><div id="detail-chart"></div><details class="chart-detail-table"><summary>Xem bảng số đo chi tiết</summary><div class="table-wrap"><table><thead><tr><th>THỜI ĐIỂM</th><th>ẢNH</th><th>MODEL</th><th>GIÁ TRỊ</th><th>ĐƠN VỊ</th><th>CẤU HÌNH</th></tr></thead><tbody id="detail-rows"></tbody></table></div></details></div></dialog>
+<script type="module" src="./app.js?v=20261127-tooltip"></script>
 </body>
 </html>

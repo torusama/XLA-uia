@@ -1,3 +1,5 @@
+import {initHistory, refreshHistory} from './history.js?v=20261127-tooltip';
+
 const $ = (selector) => document.querySelector(selector);
 const MODEL_INFO = {
   vit: {name: 'ViT', title: 'Vision Transformer', description: 'Xem dự đoán của ViT đối chiếu với ground truth trên cùng một ảnh.'},
@@ -9,7 +11,7 @@ const METRICS = [
   {key: 'iou', label: 'IoU', desc: 'Tỷ lệ giao trên hợp · càng cao càng tốt', suffix: ''},
   {key: 'latency_ms', label: 'Thời gian suy luận', desc: 'Thời gian một lần chạy trên ảnh này · càng thấp càng tốt', suffix: ' ms'},
   {key: 'params_m', label: 'Tham số', desc: 'Kích thước mô hình · triệu tham số', suffix: ' M'},
-  {key: 'gflops', label: 'GFLOPs', desc: 'Chi phí tính toán · chỉ hiển thị khi đã đo', suffix: ''},
+  {key: 'gflops', label: 'GFLOPs', desc: 'Ước tính một lượt forward · 1 ảnh 224 × 224 · càng thấp càng tốt', suffix: ''},
 ];
 const state = {tab: 'vit', samples: [], index: 0, models: {}, results: {}, api: false, generation: 0, controller: null};
 
@@ -43,6 +45,7 @@ function setTab(tab) {
   $('#page-description').textContent = info.description;
   $('#model-view').hidden = tab === 'statistics';
   $('#stats-view').hidden = tab !== 'statistics';
+  if (tab === 'statistics') refreshHistory();
   if (tab !== 'statistics') $('#result-title').textContent = `Kết quả ${info.name}`;
   runCurrent();
 }
@@ -136,7 +139,11 @@ async function runCurrent() {
     if (error.name === 'AbortError' || generation !== state.generation) return;
     ids.forEach((id) => { state.results[id] = {error: 'Không thể chạy model. Kiểm tra backend và checkpoint.'}; });
   } finally {
-    if (generation === state.generation) { state.waiting = false; render(); }
+    if (generation === state.generation) {
+      state.waiting = false;
+      render();
+      if (state.tab === 'statistics') await refreshHistory();
+    }
   }
 }
 async function init() {
@@ -161,4 +168,5 @@ async function init() {
 document.querySelectorAll('.nav-item').forEach((button) => button.addEventListener('click', () => setTab(button.dataset.tab)));
 $('#previous').addEventListener('click', () => showSample(state.index - 1));
 $('#next').addEventListener('click', () => showSample(state.index + 1));
+initHistory();
 init();

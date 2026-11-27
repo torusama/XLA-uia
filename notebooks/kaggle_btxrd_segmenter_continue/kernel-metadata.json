@@ -1,0 +1,16 @@
+{
+  "id": "vtan2405/xla-btxrd-segmenter-continue-51-100",
+  "title": "XLA BTXRD Segmenter Continue 51 100",
+  "code_file": "btxrd_segmenter_continue.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "vtan2405/xla-btxrd-segmenter-mask-transformer-50-epochs"
+  ],
+  "model_sources": []
+}

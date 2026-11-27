@@ -1,0 +1,14 @@
+{
+  "id": "vtan2405/xla-btxrd-official-segmenter-50-epochs",
+  "title": "XLA BTXRD Official Segmenter 50 Epochs",
+  "code_file": "btxrd_segmenter_official.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

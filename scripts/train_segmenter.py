@@ -33,8 +33,9 @@ def main():
     train = commands.choices["train"]
     train.add_argument("--output", type=Path, required=True)
     train.add_argument("--epochs", type=int, default=50)
-    train.add_argument("--learning-rate", type=float, default=0.0001)
-    train.add_argument("--positive-weight", type=float, default=10.0)
+    train.add_argument("--learning-rate", type=float, default=0.00001)
+    train.add_argument("--positive-weight", type=float, default=100.0)
+    train.add_argument("--mask-norm-eps", type=float, default=0.01)
     train.add_argument("--seed", type=int, default=42)
     train.add_argument("--from-scratch", action="store_true")
     commands.choices["evaluate"].add_argument("--checkpoint", type=Path, required=True)
@@ -42,8 +43,8 @@ def main():
     if args.batch_size < 1 or args.workers < 0:
         parser.error("batch-size must be positive and workers must be nonnegative")
     if args.command == "train" and (args.epochs < 1 or args.learning_rate <= 0
-                                    or args.positive_weight <= 0):
-        parser.error("epochs, learning-rate and positive-weight must be positive")
+                                    or args.positive_weight <= 0 or args.mask_norm_eps <= 0):
+        parser.error("epochs, learning-rate, positive-weight and mask-norm-eps must be positive")
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available()
                           else "cpu" if args.device == "auto" else args.device)
     if device.type == "cuda" and not torch.cuda.is_available():
@@ -57,7 +58,8 @@ def main():
         checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
         if checkpoint["archive_sha256"] != digest:
             raise ValueError("Checkpoint was trained on a different archive")
-        model = SegmenterViT(pretrained=False).to(device)
+        mask_norm_eps = checkpoint.get("settings", {}).get("mask_norm_eps", 1e-5)
+        model = SegmenterViT(pretrained=False, mask_norm_eps=mask_norm_eps).to(device)
         model.load_state_dict(checkpoint["model"])
         loader = DataLoader(test_set, batch_size=args.batch_size, num_workers=args.workers)
         positive_weight = checkpoint.get("settings", {}).get("positive_weight")
@@ -69,7 +71,8 @@ def main():
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
-    model = SegmenterViT(pretrained=not args.from_scratch).to(device)
+    model = SegmenterViT(pretrained=not args.from_scratch,
+                         mask_norm_eps=args.mask_norm_eps).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=0.01)
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                               num_workers=args.workers)
@@ -79,6 +82,7 @@ def main():
     best = -1.0
     settings = {"architecture": "segmenter_vit_mask_transformer",
                 "decoder_source_commit": "20d1bfad354165ee45c3f65972a4d9c131f58d53",
+                "mask_norm_eps": args.mask_norm_eps,
                 "archive": str(args.archive), "archive_sha256": digest, "seed": args.seed,
                 "epochs": args.epochs, "batch_size": args.batch_size,
                 "learning_rate": args.learning_rate, "positive_weight": args.positive_weight,

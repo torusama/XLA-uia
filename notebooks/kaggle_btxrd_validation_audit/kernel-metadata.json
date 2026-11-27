@@ -1,0 +1,16 @@
+{
+  "id": "vtan2405/xla-btxrd-segmenter-validation-audit",
+  "title": "XLA BTXRD Segmenter Validation Audit",
+  "code_file": "validation_audit.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "vtan2405/xla-btxrd-segmenter-continue-51-100"
+  ],
+  "model_sources": []
+}

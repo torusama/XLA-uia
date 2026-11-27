@@ -7,6 +7,16 @@ from xla.models import segmenter_vit
 from xla.vendor.segmenter.decoder import MaskTransformer
 
 
+def test_two_class_mask_normalization_retains_gradient_with_larger_epsilon():
+    def gradient(eps):
+        scores = torch.tensor([[-0.1, 0.1]], requires_grad=True)
+        output = F.layer_norm(scores, (2,), eps=eps)
+        (output[0, 1] - output[0, 0]).backward()
+        return scores.grad.norm()
+
+    assert gradient(0.01) > 100 * gradient(1e-5)
+
+
 def test_mask_transformer_binary_logits_and_gradients(monkeypatch):
     class FakeBackbone(nn.Module):
         embed_dim = 64
@@ -41,6 +51,7 @@ def test_mask_transformer_binary_logits_and_gradients(monkeypatch):
     assert model.decoder.cls_emb.grad is not None
     assert torch.isfinite(model.decoder.cls_emb.grad).all()
     assert model.decoder.cls_emb.grad.abs().sum() > 0
+    assert segmenter_vit.SegmenterViT(pretrained=False, mask_norm_eps=0.01).decoder.mask_norm.eps == 0.01
 
 
 def test_segmenter_training_uses_own_architecture_and_saves_metadata(tmp_path, monkeypatch):
@@ -67,3 +78,4 @@ def test_segmenter_training_uses_own_architecture_and_saves_metadata(tmp_path, m
     config = json.loads((output / "config.json").read_text(encoding="utf-8"))
     assert checkpoint["epoch"] == 1 and (output / "final.pt").exists()
     assert config["architecture"] == "segmenter_vit_mask_transformer"
+    assert config["mask_norm_eps"] == 0.01
