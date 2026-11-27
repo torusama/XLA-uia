@@ -73,8 +73,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vit-checkpoint", type=Path,
                         default=os.environ.get("XLA_VIT_CHECKPOINT"))
+    default_efficientvit = ROOT / "outputs" / "checkpoints" / "best_evit_seg_btxrd.pth"
     parser.add_argument("--efficientvit-checkpoint", type=Path,
-                        default=os.environ.get("XLA_EFFICIENTVIT_CHECKPOINT"))
+                        default=os.environ.get("XLA_EFFICIENTVIT_CHECKPOINT", default_efficientvit))
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
     try:
