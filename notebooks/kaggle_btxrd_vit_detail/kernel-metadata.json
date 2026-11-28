@@ -1,0 +1,14 @@
+{
+  "id": "vtan2405/xla-btxrd-vit-detail-vs-efficientvit",
+  "title": "XLA BTXRD ViT Detail vs EfficientViT",
+  "code_file": "vit_detail.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

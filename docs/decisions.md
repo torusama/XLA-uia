@@ -1,7 +1,0 @@
-# Quy?t ??nh v? c?u h?i m?
-
-- D?ng repo XLA-uia hi?n c?, Python src layout v? PyYAML; Torch l? t?y ch?n.
-- Th?m config dataset segmentation ri?ng ?? task model v? dataset nh?t qu?n.
-- K?ch th??c, batch v? hyperparameter ch? l? placeholder; normalization, taxonomy, ???ng d?n metadata v? split c?n x?c minh tr??c training.
-- Ch?a x?c minh version/license/commit ngu?n b?n th? ba; xem source registry.
-- D?ng Hatchling editable exact mode ?? h? tr? ???ng d?n Unicode tr?n Windows; b?t PYTHONUTF8=1 cho output v? c?ng c? trong PowerShell.

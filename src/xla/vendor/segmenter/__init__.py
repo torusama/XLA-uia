@@ -1,1 +1,1 @@
-"""Segmenter decoder; see LICENSE and docs/vit/segmenter_source.md."""
+"""Segmenter decoder. See LICENSE and docs/sources.md."""

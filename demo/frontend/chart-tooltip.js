@@ -1,3 +1,5 @@
+import {isOverlapMetric, maskStatus} from './overlap-metrics.js';
+
 let active = null;
 let pinned = null;
 let hideTimer;
@@ -24,7 +26,7 @@ export function dismissChartTooltip() {
 function positionTooltip() {
   if (!active || !active.point.isConnected) return;
   const {point, tooltip} = active;
-  const anchor = point.getBoundingClientRect();
+  const anchor = (point.querySelector('.plot-bar-visual') || point).getBoundingClientRect();
   const dialog = point.closest('dialog');
   const boundary = dialog ? dialog.getBoundingClientRect() : {left: 0, top: 0, right: innerWidth, bottom: innerHeight};
   const left = Math.max(8, boundary.left + 8), right = Math.min(innerWidth - 8, boundary.right - 8);
@@ -90,8 +92,13 @@ export function chartTooltip(wrap, metric, context, format) {
     const value = element('div', undefined, 'plot-tooltip-value');
     value.append(element('strong', format(row[metric.key], metric.digits ?? 2)), element('span', metric.unit));
     const details = element('dl', undefined, 'plot-tooltip-details');
-    [['Ảnh', row.sample_name], ['Thời điểm', new Date(row.created_at).toLocaleString('vi-VN')],
-      ['Lượt so sánh', String(turn)], ['Thiết bị', row.config?.device || '—']]
+    const entries = [['Ảnh', row.sample_name], ['Thời điểm', new Date(row.created_at).toLocaleString('vi-VN')],
+      ['Lượt so sánh', String(turn)], ['ID số đo', `#${row.id}`],
+      ['Cấu hình', row.config_id?.slice(0, 8) || '—'], ['Thiết bị', row.config?.device || '—']];
+    if (isOverlapMetric(metric.key)) entries.push(['Mask', maskStatus(row).text],
+      ['TP / FP / FN', ['tp', 'fp', 'fn'].map((key) => row[key] ?? '—').join(' / ')],
+      ['Giá trị lưu', String(row[metric.key])]);
+    entries
       .forEach(([label, text]) => details.append(element('dt', label), element('dd', text)));
     tooltip.replaceChildren(header, element('p', metric.title, 'plot-tooltip-title'), value, details,
       element('p', persist ? 'Đã ghim · bấm ngoài để đóng' : 'Bấm điểm để giữ thông tin', 'plot-tooltip-hint'));
@@ -103,11 +110,12 @@ export function chartTooltip(wrap, metric, context, format) {
   }
 
   function nearest(event, fallback) {
+    if (fallback.point.classList.contains('plot-bar')) return fallback;
     if (!event.clientX && !event.clientY) return fallback;
     const matrix = fallback.point.closest('svg').getScreenCTM();
     if (!matrix) return fallback;
     const location = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-    let result = fallback, distance = Infinity;
+    let result = fallback, distance = (fallback.x - location.x) ** 2 + (fallback.y - location.y) ** 2;
     for (const candidate of points.values()) {
       const squared = (candidate.x - location.x) ** 2 + (candidate.y - location.y) ** 2;
       if (squared < distance) { distance = squared; result = candidate; }

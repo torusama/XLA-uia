@@ -18,3 +18,14 @@ data/splits/*
 outputs/**/*
 !outputs/**/
 !outputs/**/.gitkeep
+/outputs/.archive/
+
+# Downloaded weights and generated data stay on the local machine.
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+/models/
+/results/
+/reports/generated/

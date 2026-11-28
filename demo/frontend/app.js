@@ -1,4 +1,4 @@
-import {initHistory, refreshHistory} from './history.js?v=20261127-tooltip';
+import {initHistory, refreshHistory} from './history.js?v=20261128-history-layout';
 
 const $ = (selector) => document.querySelector(selector);
 const MODEL_INFO = {
@@ -13,7 +13,13 @@ const METRICS = [
   {key: 'params_m', label: 'Tham số', desc: 'Kích thước mô hình · triệu tham số', suffix: ' M'},
   {key: 'gflops', label: 'GFLOPs', desc: 'Ước tính một lượt forward · 1 ảnh 224 × 224 · càng thấp càng tốt', suffix: ''},
 ];
-const state = {tab: 'vit', samples: [], index: 0, models: {}, results: {}, api: false, generation: 0, controller: null};
+const state = {tab: 'vit', samples: [], tumorSamples: [], tumorOnly: false, sample: null,
+  models: {}, results: {}, api: false, generation: 0, waiting: false,
+  batchActive: false, followingBatch: false, batchPreview: null, batchSignature: ''};
+const frameKeys = new WeakMap();
+let inferenceTimer = null;
+let pendingInference = null;
+let inferenceInFlight = false;
 
 async function getJson(path, options) {
   const response = await fetch(path, options);
@@ -33,6 +39,7 @@ function safeMask(value) {
   return typeof value === 'string' && /^data:image\/png;base64,[a-z0-9+/=]+$/i.test(value);
 }
 function setTab(tab) {
+  const leavingBatchPreview = !state.batchActive && state.followingBatch;
   state.tab = tab;
   document.querySelectorAll('.nav-item').forEach((button) => {
     const selected = button.dataset.tab === tab;
@@ -47,37 +54,95 @@ function setTab(tab) {
   $('#stats-view').hidden = tab !== 'statistics';
   if (tab === 'statistics') refreshHistory();
   if (tab !== 'statistics') $('#result-title').textContent = `Kết quả ${info.name}`;
+  if (leavingBatchPreview && state.sample && browsingSamples().length) {
+    showSample(Math.max(0, browsingSamples().findIndex((sample) => sample.index === state.sample.index)));
+  } else {
+    runCurrent();
+  }
+}
+function browsingSamples() {
+  return state.tumorOnly ? state.tumorSamples : state.samples;
+}
+function updateSampleControls() {
+  $('#previous').disabled = $('#next').disabled = state.batchActive || browsingSamples().length < 2;
+  const filter = $('#sample-tumor-only');
+  filter.disabled = state.batchActive || !state.tumorSamples.length;
+  filter.setAttribute('aria-pressed', String(state.tumorOnly));
+}
+function showSample(position) {
+  const samples = browsingSamples();
+  if (!samples.length || state.batchActive) return;
+  state.followingBatch = false;
+  displaySample(samples[(position + samples.length) % samples.length]);
   runCurrent();
 }
-function showSample(index) {
-  if (!state.samples.length) return;
-  state.index = (index + state.samples.length) % state.samples.length;
-  const sample = state.samples[state.index];
+function moveSample(direction) {
+  const position = browsingSamples().findIndex((sample) => sample.index === state.sample?.index);
+  showSample(position < 0 ? (direction > 0 ? 0 : -1) : position + direction);
+}
+function toggleTumorFilter() {
+  if (state.batchActive || !state.tumorSamples.length) return;
+  state.tumorOnly = !state.tumorOnly;
+  const position = browsingSamples().findIndex((sample) => sample.index === state.sample?.index);
+  showSample(Math.max(0, position));
+}
+function displaySample(sample, batch = false) {
+  state.sample = sample;
   $('#sample-name').textContent = sample.name;
-  $('#sample-label').textContent = sample.label === 'normal' ? 'Bình thường' : sample.category;
-  $('#sample-position').textContent = `Ảnh ${state.index + 1} / ${state.samples.length} · Tập test BTXRD`;
-  $('#previous').disabled = $('#next').disabled = false;
-  document.querySelectorAll('.sample-image').forEach((image) => { image.src = sample.image_url; image.hidden = false; });
-  document.querySelectorAll('.truth-image').forEach((image) => { image.src = sample.ground_truth_url; image.hidden = false; });
+  $('#sample-label').textContent = sample.label === 'normal' ? 'Bình thường' : sample.category || 'Có u';
+  const samples = browsingSamples();
+  const position = batch ? sample.index : samples.findIndex((item) => item.index === sample.index);
+  const total = batch ? (state.samples.length || sample.total) : samples.length;
+  const scope = batch && state.batchActive ? ' · Đang chạy hàng loạt' : !batch && state.tumorOnly ? ' · Có u' : '';
+  $('#sample-position').textContent = `Ảnh ${position + 1} / ${total || '—'}${scope}`;
+  updateSampleControls();
+  document.querySelectorAll('#single-input-image, #compare-input-image').forEach((image) => {
+    if (image.getAttribute('src') !== sample.image_url) image.src = sample.image_url;
+    image.hidden = false;
+  });
+  document.querySelectorAll('.truth-image').forEach((image) => {
+    if (image.getAttribute('src') !== sample.ground_truth_url) image.src = sample.ground_truth_url;
+    image.hidden = false;
+  });
   document.querySelectorAll('.stage-placeholder').forEach((node) => { node.hidden = true; });
-  runCurrent();
+  $('#compare-input-caption').textContent = sample.name;
+  $('#compare-truth-caption').textContent = sample.label === 'normal' ? 'Không có vùng u' : 'Vùng u được gán nhãn';
 }
 function modelMessage(id, waiting = false) {
   if (waiting && state.models[id]?.ready) return 'Đang chạy phân vùng...';
   return state.models[id]?.message || 'Mô hình chưa được kết nối.';
 }
-function paintModel(id, result, waiting = false) {
+function paintModel(id, result, waiting = false, imageUrl = state.sample?.image_url) {
   const layer = $(id === 'single' ? '#model-layer' : `#compare-${id}-layer`);
   const mask = $(id === 'single' ? '#model-mask' : `#compare-${id}-mask`);
   const message = $(id === 'single' ? '#model-message' : `#compare-${id}-message`);
   const modelId = id === 'single' ? state.tab : id;
   const hasResult = result?.ready === true && safeMask(result.mask_url);
-  layer.hidden = !hasResult;
-  message.hidden = hasResult;
-  if (hasResult) mask.src = result.mask_url;
-  else { mask.removeAttribute('src'); message.textContent = result?.error || modelMessage(modelId, waiting); }
+  if (!hasResult) {
+    frameKeys.delete(layer);
+    layer.hidden = true; message.hidden = false;
+    mask.removeAttribute('src'); message.textContent = result?.error || modelMessage(modelId, waiting);
+    return;
+  }
+  const key = `${imageUrl}|${result.mask_url}`;
+  if (frameKeys.get(layer) === key) return;
+  frameKeys.set(layer, key);
+  layer.hidden = true; message.hidden = false; message.textContent = 'Đang tải kết quả...';
+  const background = new Image(), overlay = new Image();
+  background.src = imageUrl; overlay.src = result.mask_url;
+  Promise.all([background.decode(), overlay.decode()]).then(() => {
+    if (frameKeys.get(layer) !== key) return;
+    layer.querySelector('.sample-image').src = imageUrl;
+    mask.src = result.mask_url;
+    layer.hidden = false; message.hidden = true;
+  }).catch(() => {
+    if (frameKeys.get(layer) !== key) return;
+    frameKeys.delete(layer);
+    message.textContent = 'Không tải được ảnh kết quả.';
+  });
 }
 function render() {
+  if (state.followingBatch && state.batchPreview) { renderBatchPreview(); return; }
   if (state.tab !== 'statistics') {
     const id = state.tab;
     const result = state.results[id];
@@ -89,7 +154,11 @@ function render() {
     $('#model-iou').textContent = format(result?.iou, METRICS[1]);
     $('#model-time').textContent = format(result?.latency_ms, METRICS[2]);
   } else {
-    for (const id of ['vit', 'efficientvit']) paintModel(id, state.results[id], state.waiting);
+    for (const id of ['vit', 'efficientvit']) {
+      paintModel(id, state.results[id], state.waiting);
+      $(`#compare-${id}-caption`).textContent = state.results[id]?.ready ? state.sample?.name || '' : '';
+      $(`#compare-${id}-status`).textContent = state.results[id]?.ready ? 'Xong' : state.waiting ? 'Đang chạy' : '';
+    }
     const readyCount = ['vit', 'efficientvit'].filter((id) => state.results[id]?.ready).length;
     $('#comparison-status').textContent = state.waiting ? 'Đang phân tích' : readyCount === 2 ? 'Đã có hai kết quả' : readyCount === 1 ? 'Đã có một kết quả' : 'Chưa có kết quả';
     renderCharts();
@@ -104,7 +173,7 @@ function renderCharts() {
     const numeric = values.filter((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0);
     const max = metric.key === 'dice' || metric.key === 'iou' ? 1 : Math.max(...numeric, 0);
     const chart = element('article', 'chart-card');
-    chart.append(element('h3', '', metric.label), element('p', '', metric.desc));
+    chart.append(element('h3', '', metric.label));
     ['vit', 'efficientvit'].forEach((id, index) => {
       const row = element('div', 'chart-row');
       const label = element('span', 'chart-label', MODEL_INFO[id].name);
@@ -121,33 +190,107 @@ function renderCharts() {
     table.append(row);
   });
 }
-async function runCurrent() {
+function sampleUrls(sample) {
+  return {...sample, image_url: `/api/image?index=${sample.index}`, ground_truth_url: `/api/ground-truth?index=${sample.index}`};
+}
+function renderBatchPreview() {
+  const preview = state.batchPreview;
+  if (!preview?.sample) return;
+  displaySample(sampleUrls(preview.sample), true);
+  state.results = Object.fromEntries(Object.entries(preview.models || {}).map(([id, entry]) => [id, entry.result]));
+  for (const id of ['vit', 'efficientvit']) {
+    const entry = preview.models?.[id];
+    const waiting = state.batchActive && preview.processing_model === id;
+    paintModel(id, entry?.result, waiting, entry ? sampleUrls(entry.sample).image_url : undefined);
+    const current = entry?.sample.index === preview.sample.index;
+    $(`#compare-${id}-caption`).textContent = entry ? `${entry.sample.name}${current ? '' : ' · trước đó'}` : 'Chờ kết quả';
+    $(`#compare-${id}-status`).textContent = waiting ? 'Đang chạy' : current && entry?.result.ready ? 'Xong' : '';
+  }
+  $('#comparison-status').textContent = state.batchActive ? `Đang chạy ${MODEL_INFO[preview.processing_model]?.name || 'hàng loạt'}` : preview.state === 'complete' ? 'Hoàn tất' : preview.state === 'error' ? 'Gặp lỗi' : 'Đã dừng';
+  $('#comparison-metric-note').textContent = 'Kết quả mới nhất của từng model; tên ảnh ở dưới mỗi khung.';
+  renderCharts();
+  if (state.tab !== 'statistics') {
+    const entry = preview.models?.[state.tab];
+    const waiting = state.batchActive && preview.processing_model === state.tab;
+    paintModel('single', entry?.result, waiting, entry ? sampleUrls(entry.sample).image_url : undefined);
+    $('#model-result-status').textContent = waiting ? 'ĐANG CHẠY' : entry?.result.ready ? 'ĐÃ PHÂN VÙNG' : 'CHỜ KẾT QUẢ';
+    $('#model-status').textContent = waiting ? 'Đang chạy' : 'Sẵn sàng';
+    $('#model-dice').textContent = format(entry?.result.dice, METRICS[0]);
+    $('#model-iou').textContent = format(entry?.result.iou, METRICS[1]);
+    $('#model-time').textContent = format(entry?.result.latency_ms, METRICS[2]);
+    $('#single-output-caption').textContent = entry?.sample.name || 'Chờ kết quả';
+  }
+}
+function handleBatchProgress(data) {
+  const active = data.jobs.find((job) => ['running', 'stopping'].includes(job.state));
+  if (active && !state.batchActive) {
+    state.generation++;
+    clearInferenceTimer();
+    state.waiting = false;
+  }
+  state.batchActive = Boolean(active);
+  updateSampleControls();
+  const preview = data.preview;
+  if (active) {
+    state.followingBatch = true;
+  }
+  if (!preview || !state.followingBatch || (active && preview.job_id !== active.id)) return;
+  const signature = `${preview.job_id}:${preview.revision}:${Boolean(active)}:${state.tab}`;
+  if (signature === state.batchSignature) return;
+  state.batchSignature = signature;
+  state.batchPreview = preview;
+  renderBatchPreview();
+}
+function clearInferenceTimer() {
+  clearTimeout(inferenceTimer);
+  inferenceTimer = null;
+  pendingInference = null;
+}
+function runCurrent() {
+  if (state.batchActive) { render(); return; }
+  $('#comparison-metric-note').textContent = 'Dice/IoU trên ảnh đang xem. Hai mask rỗng được quy ước bằng 1.';
+  $('#single-output-caption').textContent = 'Vùng màu là mask dự đoán.';
   const generation = ++state.generation;
-  if (state.controller) state.controller.abort();
-  state.controller = new AbortController();
+  clearInferenceTimer();
   state.results = {};
-  const ids = state.tab === 'statistics' ? ['vit', 'efficientvit'] : [state.tab];
-  state.waiting = Boolean(state.samples.length && state.api && ids.some((id) => state.models[id]?.ready));
+  const tab = state.tab;
+  const ids = tab === 'statistics' ? ['vit', 'efficientvit'] : [tab];
+  state.waiting = Boolean(state.sample && state.api && ids.some((id) => state.models[id]?.ready));
   render();
   if (!state.waiting) return;
+  pendingInference = {generation, tab, ids, index: state.sample.index};
+  inferenceTimer = setTimeout(() => {
+    inferenceTimer = null;
+    flushInference();
+  }, 160);
+}
+async function flushInference() {
+  // Cancelling fetch does not cancel the model forward pass in the server.
+  if (inferenceInFlight || inferenceTimer !== null || !pendingInference) return;
+  const {generation, tab, ids, index} = pendingInference;
+  pendingInference = null;
+  inferenceInFlight = true;
   try {
-    const endpoint = state.tab === 'statistics' ? `/api/compare?index=${state.index}` : `/api/predict?index=${state.index}&model=${state.tab}`;
-    const data = await getJson(endpoint, {signal: state.controller.signal});
-    if (generation !== state.generation || data.index !== state.index) return;
-    state.results = state.tab === 'statistics' ? data.models : {[state.tab]: data.result};
+    const endpoint = tab === 'statistics' ? `/api/compare?index=${index}` : `/api/predict?index=${index}&model=${tab}`;
+    const data = await getJson(endpoint);
+    if (generation !== state.generation || data.index !== index) return;
+    state.results = tab === 'statistics' ? data.models : {[tab]: data.result};
   } catch (error) {
-    if (error.name === 'AbortError' || generation !== state.generation) return;
+    if (generation !== state.generation) return;
     ids.forEach((id) => { state.results[id] = {error: 'Không thể chạy model. Kiểm tra backend và checkpoint.'}; });
   } finally {
+    inferenceInFlight = false;
     if (generation === state.generation) {
       state.waiting = false;
       render();
-      if (state.tab === 'statistics') await refreshHistory();
+      if (tab === 'statistics') refreshHistory();
     }
+    flushInference();
   }
 }
 async function init() {
   setTab('vit');
+  await batchReady;
   try {
     const [models, samples] = await Promise.all([getJson('/api/models'), getJson('/api/samples')]);
     state.models = models.models || {};
@@ -162,11 +305,13 @@ async function init() {
       $('#notice').textContent = 'Chưa tìm thấy dữ liệu BTXRD. Hãy chạy backend cục bộ và kiểm tra dataset.';
     }
   }
+  state.tumorSamples = state.samples.filter((sample) => sample.label === 'tumor');
   if (state.samples.length) showSample(Math.max(0, state.samples.findIndex((sample) => sample.label === 'tumor')));
   else { $('#sample-name').textContent = 'Chưa có ảnh'; render(); }
 }
 document.querySelectorAll('.nav-item').forEach((button) => button.addEventListener('click', () => setTab(button.dataset.tab)));
-$('#previous').addEventListener('click', () => showSample(state.index - 1));
-$('#next').addEventListener('click', () => showSample(state.index + 1));
-initHistory();
+$('#previous').addEventListener('click', () => moveSample(-1));
+$('#next').addEventListener('click', () => moveSample(1));
+$('#sample-tumor-only').addEventListener('click', toggleTumorFilter);
+const batchReady = initHistory(handleBatchProgress);
 init();

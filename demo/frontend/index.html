@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20261127-tooltip">
+  <link rel="stylesheet" href="./style.css?v=20261128-sample-browse">
 </head>
 <body>
 <div class="app-shell">
@@ -28,35 +28,34 @@
       <div class="page-heading"><div><div class="section-label"><span class="green-line"></span> KHÔNG GIAN PHÂN TÍCH</div><h1 id="page-title">Vision Transformer<span class="title-period">.</span></h1><p id="page-description" class="page-description">Khám phá vùng tổn thương trên ảnh X-quang.</p></div><div class="model-badge"><span>TẬP DỮ LIỆU</span><strong>BTXRD · Test</strong></div></div>
       <section id="sample-bar" class="sample-bar" aria-label="Chọn ảnh">
         <div class="sample-details"><span class="field-label">ẢNH X-QUANG ĐANG XEM</span><div class="sample-name"><strong id="sample-name">Đang tải dữ liệu...</strong><span id="sample-label"></span></div><p id="sample-position">Tập test BTXRD</p></div>
-        <div class="sample-controls"><button id="previous" class="secondary-button" disabled>Ảnh trước</button><button id="next" class="secondary-button" disabled>Ảnh tiếp theo</button></div>
+        <div class="sample-controls">
+          <button id="sample-tumor-only" class="secondary-button" type="button" aria-pressed="false" disabled>Chỉ ảnh có u</button>
+          <button id="previous" class="secondary-button" type="button" disabled>Ảnh trước</button>
+          <button id="next" class="secondary-button" type="button" disabled>Ảnh tiếp theo</button>
+        </div>
       </section>
       <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
       <section id="model-view" aria-label="Kết quả của mô hình">
         <div class="scan-grid">
-          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">ẢNH ĐẦU VÀO</span><h2>Ảnh X-quang</h2></div><span class="panel-tag">BTXRD</span></div><div class="scan-stage"><img class="sample-image" alt="Ảnh X-quang của mẫu đang xem"><p class="stage-placeholder">Chưa có ảnh</p></div><p class="scan-caption">Ảnh gốc trong tập test.</p></article>
+          <article class="scan-card"><div class="scan-head"><div><h2>Ảnh X-quang</h2></div><span class="panel-tag">BTXRD</span></div><div class="scan-stage"><img id="single-input-image" class="sample-image" alt="Ảnh X-quang của mẫu đang xem"><p class="stage-placeholder">Chưa có ảnh</p></div><p class="scan-caption">Ảnh gốc trong tập test.</p></article>
           <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">GROUND TRUTH</span><h2>Vùng gán nhãn</h2></div><span class="panel-tag">MASK THẬT</span></div><div class="scan-stage"><img class="truth-image" alt="Ground truth của mẫu đang xem"><p class="stage-placeholder">Chưa có mask</p></div><p class="scan-caption">Vùng trắng là tổn thương được gán nhãn.</p></article>
-          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">DỰ ĐOÁN</span><h2 id="result-title">Kết quả ViT</h2></div><span class="result-tag" id="model-result-status">CHƯA SẴN SÀNG</span></div><div class="scan-stage"><div class="model-layer" id="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang"><img id="model-mask" class="mask-overlay" alt="Mask mô hình dự đoán"></div><div class="stage-message" id="model-message">Mô hình chưa được kết nối.</div></div><p class="scan-caption">Vùng màu là mask mô hình dự đoán.</p></article>
+          <article class="scan-card"><div class="scan-head"><div><h2 id="result-title">Kết quả ViT</h2></div><span class="result-tag" id="model-result-status">CHƯA SẴN SÀNG</span></div><div class="scan-stage"><div class="model-layer" id="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang"><img id="model-mask" class="mask-overlay" alt="Mask mô hình dự đoán"></div><div class="stage-message" id="model-message">Mô hình chưa được kết nối.</div></div><p id="single-output-caption" class="scan-caption">Vùng màu là mask dự đoán.</p></article>
         </div>
         <section class="model-summary"><div><span class="field-label">TRẠNG THÁI MÔ HÌNH</span><p id="model-status">Đang kiểm tra...</p></div><div><span class="field-label">DICE · ẢNH NÀY</span><p id="model-dice">—</p></div><div><span class="field-label">IOU · ẢNH NÀY</span><p id="model-iou">—</p></div><div><span class="field-label">SUY LUẬN</span><p id="model-time">—</p></div></section>
       </section>
 
       <section id="stats-view" aria-label="So sánh hai mô hình" hidden>
-        <div class="compare-heading"><div><span class="panel-kicker">CÙNG ẢNH, CÙNG GROUND TRUTH</span><h2>So sánh trực quan</h2><p>Đổi ảnh để chạy lại cả hai mô hình và cập nhật các chỉ số.</p></div><span class="data-note" id="comparison-status">Chưa có kết quả</span></div>
-        <section class="batch-panel" aria-label="So sánh toàn bộ tập ảnh">
-          <div class="batch-heading"><div><span class="panel-kicker">SO SÁNH HÀNG LOẠT</span><h2>Để hai model chạy qua toàn bộ tập ảnh.</h2><p id="batch-description">Đang kiểm tra tập ảnh và trạng thái model...</p></div><div class="batch-actions"><button id="batch-start" class="primary-button" disabled>So sánh toàn bộ tập ảnh</button><button id="batch-stop" class="secondary-button" hidden>Dừng sau ảnh này</button></div></div>
-          <div id="batch-view" hidden><div class="batch-progress-label"><strong id="batch-status"></strong><span>Chạy ở backend · có thể tải lại trang</span></div><progress id="batch-progress" max="1" value="0"></progress><p id="batch-current" role="status" aria-live="polite"></p></div>
-          <p id="batch-error" class="notice" role="alert" hidden></p>
-        </section>
+        <div class="compare-heading"><div><h2>So sánh trực quan</h2></div><span class="data-note" id="comparison-status">Chưa có kết quả</span></div>
         <div class="compare-grid">
-          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">ẢNH ĐẦU VÀO</span><h2>Ảnh X-quang</h2></div></div><div class="scan-stage"><img class="sample-image" alt="Ảnh X-quang đang so sánh"><p class="stage-placeholder">Chưa có ảnh</p></div></article>
-          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">GROUND TRUTH</span><h2>Vùng gán nhãn</h2></div></div><div class="scan-stage"><img class="truth-image" alt="Ground truth đang so sánh"><p class="stage-placeholder">Chưa có mask</p></div></article>
-          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">DỰ ĐOÁN</span><h2>ViT</h2></div></div><div class="scan-stage"><div id="compare-vit-layer" class="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang"><img id="compare-vit-mask" class="mask-overlay" alt="Mask ViT"></div><div class="stage-message" id="compare-vit-message">Chưa kết nối</div></div></article>
-          <article class="scan-card"><div class="scan-head"><div><span class="panel-kicker">DỰ ĐOÁN</span><h2>EfficientViT</h2></div></div><div class="scan-stage"><div id="compare-efficientvit-layer" class="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang"><img id="compare-efficientvit-mask" class="mask-overlay" alt="Mask EfficientViT"></div><div class="stage-message" id="compare-efficientvit-message">Chưa kết nối</div></div></article>
+          <article class="scan-card"><div class="scan-head"><h2>Ảnh đang xử lý</h2></div><div class="scan-stage"><img id="compare-input-image" class="sample-image" alt="Ảnh X-quang đang so sánh"><p class="stage-placeholder">Chưa có ảnh</p></div><p id="compare-input-caption" class="scan-caption"></p></article>
+          <article class="scan-card"><div class="scan-head"><h2>Ground truth</h2></div><div class="scan-stage"><img class="truth-image" alt="Ground truth đang so sánh"><p class="stage-placeholder">Chưa có mask</p></div><p id="compare-truth-caption" class="scan-caption"></p></article>
+          <article class="scan-card"><div class="scan-head"><h2>ViT</h2><span class="result-tag" id="compare-vit-status"></span></div><div class="scan-stage"><div id="compare-vit-layer" class="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang của output ViT"><img id="compare-vit-mask" class="mask-overlay" alt="Mask ViT"></div><div class="stage-message" id="compare-vit-message">Chưa kết nối</div></div><p id="compare-vit-caption" class="scan-caption"></p></article>
+          <article class="scan-card"><div class="scan-head"><h2>EfficientViT</h2><span class="result-tag" id="compare-efficientvit-status"></span></div><div class="scan-stage"><div id="compare-efficientvit-layer" class="model-layer" hidden><img class="sample-image" alt="Ảnh X-quang của output EfficientViT"><img id="compare-efficientvit-mask" class="mask-overlay" alt="Mask EfficientViT"></div><div class="stage-message" id="compare-efficientvit-message">Chưa kết nối</div></div><p id="compare-efficientvit-caption" class="scan-caption"></p></article>
         </div>
-        <div class="comparison-panel"><div class="comparison-heading"><div><span class="panel-kicker">ĐO TRÊN ẢNH ĐANG XEM</span><h2>Chỉ số & chi phí tính toán</h2></div><span>SEGMENTATION · BTXRD</span></div><div class="chart-grid" id="chart-grid"></div><div class="table-wrap"><table><thead><tr><th>CHỈ SỐ</th><th>ViT</th><th>EfficientViT</th><th>Ý NGHĨA</th></tr></thead><tbody id="metrics-table"></tbody></table></div><p class="table-note">Dice và IoU tính trên ảnh đang xem; cùng mask rỗng được tính là 1. Thời gian là một lượt suy luận trên thiết bị hiện tại, có thể thay đổi. GFLOPs chỉ hiển thị khi đã đo; không phải kết quả đánh giá toàn bộ test.</p></div>
+        <div class="comparison-panel"><div class="comparison-heading"><h2>Chỉ số mới nhất</h2></div><div class="chart-grid" id="chart-grid"></div><div class="table-wrap"><table><thead><tr><th>CHỈ SỐ</th><th>ViT</th><th>EfficientViT</th><th>Ý NGHĨA</th></tr></thead><tbody id="metrics-table"></tbody></table></div><p id="comparison-metric-note" class="table-note">Dice/IoU trên ảnh đang xem. Hai mask rỗng được quy ước bằng 1.</p></div>
       <section id="history-view" aria-label="Thống kê qua các ảnh đã phân vùng">
-        <div class="analytics-heading"><div><span class="panel-kicker">HIỆU SUẤT QUA TỪNG LƯỢT CHẠY</span><h2>Mỗi chỉ số. Một góc nhìn.</h2><p>Đổi ảnh để cập nhật đồng thời các biểu đồ của ViT và EfficientViT.</p></div><span class="live-label">Tự động lưu & cập nhật</span></div>
+        <div class="analytics-heading"><h2>Lịch sử chạy</h2><span class="live-label">Cập nhật tự động</span></div>
         <div class="analytics-overview"><div class="analytics-overview-main"><span class="field-label">DỮ LIỆU SO SÁNH</span><strong id="history-count">Đang tải số đo</strong><span id="history-range">Các lượt chạy được lưu ở backend</span></div><div class="overview-stat"><strong id="history-pairs">0</strong><span>Cặp so sánh</span></div><div class="overview-stat"><strong id="history-images">0</strong><span>Ảnh khác nhau</span></div><div class="model-legend"><span class="legend-vit">ViT</span><span class="legend-efficientvit">EfficientViT</span></div></div>
         <div class="history-toolbar">
           <label>Phiên chạy<select id="history-session"><option value="all">Tất cả phiên</option><option value="current">Phiên hiện tại</option></select></label>
@@ -64,10 +63,60 @@
           <label>Số lượt gần nhất<select id="history-limit"><option value="200">200</option><option value="500">500</option><option value="1000">1000</option><option value="2000">2.000 · đủ toàn bộ tập</option></select></label>
           <label>Lượt chạy hàng loạt<select id="history-batch"><option value="">Tất cả lượt so sánh</option></select></label>
           <label>Trục biểu đồ<select id="history-axis"><option value="runs">Theo lượt chạy</option><option value="time">Theo thời gian</option></select></label>
+          <label>Ảnh cho Dice / IoU<select id="history-mask"><option value="foreground" selected>Ảnh có vùng u</option><option value="all">Tất cả ảnh · gồm GT rỗng</option><option value="empty">Chỉ GT rỗng · điểm 0 hoặc 1</option></select></label>
           <button id="history-refresh" class="secondary-button">Làm mới</button>
           <a id="history-csv" class="secondary-button" download="segmentation-history.csv">Tải CSV</a>
         </div>
-        <div class="analytics-caption"><span>Mỗi panel thể hiện một độ đo riêng. Di chuột vào điểm để xem ảnh và thời điểm chạy.</span><span id="history-updated" class="data-note"></span></div>
+        <section class="batch-panel" aria-labelledby="batch-title">
+          <div class="batch-heading">
+            <div>
+              <h3 id="batch-title">So sánh trên tập test</h3>
+              <p id="batch-description">Đang kiểm tra dữ liệu…</p>
+            </div>
+            <div class="batch-actions">
+              <button id="batch-start" class="primary-button" disabled>Chạy so sánh</button>
+              <button id="batch-stop" class="secondary-button" hidden>Dừng sau ảnh này</button>
+            </div>
+          </div>
+          <div id="batch-view" hidden>
+            <strong id="batch-status"></strong>
+            <progress id="batch-progress" max="1" value="0" aria-labelledby="batch-status"></progress>
+            <p id="batch-current" role="status" aria-live="polite"></p>
+          </div>
+          <p id="batch-error" class="notice" role="alert" hidden></p>
+        </section>
+        <section id="batch-report" class="batch-report" aria-labelledby="batch-report-title" hidden>
+          <div class="batch-heading">
+            <div>
+              <h3 id="batch-report-title">Báo cáo lượt chạy</h3>
+              <p id="batch-report-status" role="status"></p>
+            </div>
+            <a id="batch-report-download" class="secondary-button batch-download" download hidden>Tải ZIP</a>
+          </div>
+          <div id="batch-report-highlights" class="batch-report-highlights"></div>
+          <div id="batch-report-charts" class="batch-report-charts" hidden>
+            <div id="batch-chart-buttons" class="batch-chart-buttons" role="group" aria-label="Chọn biểu đồ"></div>
+            <figure class="batch-chart-figure">
+              <a id="batch-chart-image-link" target="_blank" rel="noopener">
+                <img id="batch-chart-image" alt="">
+              </a>
+              <figcaption>
+                <span id="batch-chart-caption"></span>
+                <a id="batch-chart-original" target="_blank" rel="noopener">Mở ảnh gốc ↗</a>
+              </figcaption>
+            </figure>
+          </div>
+          <details id="batch-report-summary" class="batch-report-summary" hidden>
+            <summary>Xem bảng chỉ số</summary>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th scope="col">Chỉ số</th><th scope="col">ViT</th><th scope="col">EfficientViT</th></tr></thead>
+                <tbody id="batch-report-metrics"></tbody>
+              </table>
+            </div>
+          </details>
+        </section>
+        <div class="analytics-caption"><span>Dice/IoU: mặc định chỉ ảnh có u.</span><span id="history-updated" class="data-note"></span></div>
         <div id="history-connection" class="notice" role="status" hidden></div>
         <div id="history-charts" class="timeline-grid"></div>
         <div class="comparison-panel"><div class="comparison-heading"><h2>Tổng hợp các lượt đã lưu</h2></div><div class="table-wrap"><table class="history-table"><thead><tr><th>MODEL / CẤU HÌNH</th><th>LƯỢT</th><th>ẢNH KHÁC NHAU</th><th>TB ms</th><th>TRUNG VỊ ms</th><th>P95 ms</th><th>ẢNH/s</th><th>TB DICE</th><th>TB IOU</th><th>DICE PIXEL</th><th>IOU PIXEL</th><th>TB RAM MiB</th><th>TB RAM TĂNG MiB</th><th>TB LÕI CPU</th><th>TB VRAM TĂNG MiB</th><th>THAM SỐ M</th><th>GFLOPs</th></tr></thead><tbody id="history-summary"></tbody></table></div><p class="table-note">RAM là RSS của tiến trình server chứa cả hai model, lấy mẫu mỗi 10 ms; mức tăng chỉ là ước tính bộ nhớ thêm trong forward. CUDA trả bộ nhớ tensor được PyTorch cấp phát, không phải toàn bộ VRAM của thiết bị. Không có phép đo điện năng hoặc GPU utilization.</p></div>
@@ -77,7 +126,19 @@
     </section>
   </main>
 </div>
-<dialog id="chart-dialog" aria-labelledby="chart-dialog-title"><div class="chart-dialog-shell"><header class="chart-dialog-header"><div><span class="panel-kicker">XEM CHI TIẾT BIỂU ĐỒ</span><h2 id="chart-dialog-title">Biểu đồ</h2></div><button id="chart-dialog-close" class="secondary-button" autofocus>Đóng</button></header><div class="chart-dialog-controls"><label>Phạm vi hiển thị<select id="detail-window"><option value="0">Tất cả số đo đang lọc</option><option value="20">20 cặp gần nhất</option><option value="50">50 cặp gần nhất</option></select></label><span id="detail-count"></span></div><div id="detail-chart"></div><details class="chart-detail-table"><summary>Xem bảng số đo chi tiết</summary><div class="table-wrap"><table><thead><tr><th>THỜI ĐIỂM</th><th>ẢNH</th><th>MODEL</th><th>GIÁ TRỊ</th><th>ĐƠN VỊ</th><th>CẤU HÌNH</th></tr></thead><tbody id="detail-rows"></tbody></table></div></details></div></dialog>
-<script type="module" src="./app.js?v=20261127-tooltip"></script>
+<dialog id="chart-dialog" aria-labelledby="chart-dialog-title">
+  <div class="chart-dialog-shell">
+    <header class="chart-dialog-header"><h2 id="chart-dialog-title">Biểu đồ</h2><button id="chart-dialog-close" class="secondary-button" autofocus>Đóng</button></header>
+    <div class="chart-dialog-controls">
+      <label>Phạm vi<select id="detail-window"><option value="20">20 lượt</option><option value="50">50 lượt</option><option value="100" selected>100 lượt</option><option value="0">Tất cả</option></select></label>
+      <div class="detail-navigation" role="group" aria-label="Duyệt lịch sử"><button id="detail-older" class="secondary-button" type="button">← Cũ hơn</button><button id="detail-newer" class="secondary-button" type="button">Mới hơn →</button><button id="detail-latest" class="secondary-button" type="button">Mới nhất</button></div>
+      <span id="detail-count"></span>
+    </div>
+    <p id="detail-message" class="detail-message" role="status"></p>
+    <div id="detail-chart"></div>
+    <details class="chart-detail-table"><summary>Bảng số đo</summary><div class="table-wrap"><table><thead><tr><th>THỜI ĐIỂM</th><th>ẢNH</th><th>MODEL</th><th>GIÁ TRỊ</th><th>ĐƠN VỊ</th><th>CẤU HÌNH</th><th>ID SỐ ĐO</th><th>MASK</th><th>TP</th><th>FP</th><th>FN</th></tr></thead><tbody id="detail-rows"></tbody></table></div></details>
+  </div>
+</dialog>
+<script type="module" src="./app.js?v=20261128-sample-browse"></script>
 </body>
 </html>

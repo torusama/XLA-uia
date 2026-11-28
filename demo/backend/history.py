@@ -34,6 +34,9 @@ class HistoryStore:
                 id TEXT PRIMARY KEY, state TEXT NOT NULL, created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL, total INTEGER NOT NULL, completed INTEGER NOT NULL,
                 current_name TEXT, error TEXT)""")
+            job_columns = {row[1] for row in connection.execute("PRAGMA table_info(batch_jobs)")}
+            if "selection" not in job_columns:
+                connection.execute("ALTER TABLE batch_jobs ADD COLUMN selection TEXT")
 
     @contextmanager
     def connect(self):

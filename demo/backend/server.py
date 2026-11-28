@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 from .batch import BatchRunner
 from .dataset import ROOT, TestDataset, png_bytes
 from .history import METRIC_KEYS, HistoryStore
-from .models import ModelRegistry
+from .models import DEFAULT_EFFICIENTVIT_CHECKPOINT, DEFAULT_VIT_CHECKPOINT, ModelRegistry
 
 
 class DemoHandler(SimpleHTTPRequestHandler):
@@ -27,10 +27,12 @@ class DemoHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
-    def send_bytes(self, content, content_type, status=200):
+    def send_bytes(self, content, content_type, status=200, filename=None):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
+        if filename:
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.end_headers()
         self.wfile.write(content)
 
@@ -48,9 +50,13 @@ class DemoHandler(SimpleHTTPRequestHandler):
             if self.batch is None:
                 return self.send_json({"error": "Batch service unavailable"}, 503)
             return self.send_json({"jobs": self.batch.jobs(),
-                                   "ready": all(self.registry.statuses()[name]["ready"]
+                                   "preview": self.batch.preview(),
+                                   "ready": bool(self.batch.indices) and all(self.registry.statuses()[name]["ready"]
                                                 for name in ("vit", "efficientvit")),
-                                   "total_samples": len(self.dataset.rows) if self.dataset else 0})
+                                   "total_samples": len(self.batch.indices),
+                                   "selection": self.batch.selection_summary()})
+        if parsed.path == "/api/batch/report":
+            return self.send_comparison_report(parse_qs(parsed.query))
         if parsed.path in ("/api/history", "/api/history.csv"):
             if self.history is None:
                 return self.send_json({"error": "History storage unavailable"}, 503)
@@ -113,6 +119,29 @@ class DemoHandler(SimpleHTTPRequestHandler):
         except sqlite3.Error:
             return self.send_json({"error": "Could not persist inference history"}, 503)
 
+    def send_comparison_report(self, query):
+        from .comparison_report import get_report
+
+        if self.history is None:
+            return self.send_json({"error": "History storage unavailable"}, 503)
+        job_id = query.get("job_id", [""])[0]
+        filename = query.get("file", [""])[0]
+        try:
+            overview, files = get_report(self.history, job_id)
+        except LookupError as exc:
+            return self.send_json({"error": str(exc)}, 404)
+        except ValueError as exc:
+            return self.send_json({"error": str(exc)}, 409)
+        except (ImportError, OSError, RuntimeError, sqlite3.Error) as exc:
+            return self.send_json({"error": str(exc)}, 503)
+        if not filename:
+            return self.send_json(overview)
+        if filename == "report.zip":
+            return self.send_bytes(files[filename], "application/zip", filename=f"bonescope-{job_id}.zip")
+        if filename not in files:
+            return self.send_json({"error": "Chart unavailable"}, 404)
+        return self.send_bytes(files[filename], "image/png")
+
     def do_POST(self):
         path = urlsplit(self.path).path
         origin = self.headers.get("Origin")
@@ -136,11 +165,13 @@ class DemoHandler(SimpleHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    default_vit = DEFAULT_VIT_CHECKPOINT if DEFAULT_VIT_CHECKPOINT.is_file() else None
     parser.add_argument("--vit-checkpoint", type=Path,
-                        default=os.environ.get("XLA_VIT_CHECKPOINT"))
-    default_efficientvit = ROOT / "outputs" / "checkpoints" / "best_evit_seg_btxrd.pth"
+                        default=os.environ.get("XLA_VIT_CHECKPOINT") or default_vit)
+    default_efficientvit = (DEFAULT_EFFICIENTVIT_CHECKPOINT
+                            if DEFAULT_EFFICIENTVIT_CHECKPOINT.is_file() else None)
     parser.add_argument("--efficientvit-checkpoint", type=Path,
-                        default=os.environ.get("XLA_EFFICIENTVIT_CHECKPOINT", default_efficientvit))
+                        default=os.environ.get("XLA_EFFICIENTVIT_CHECKPOINT") or default_efficientvit)
     parser.add_argument("--vit-threshold", type=float, default=0.5)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--history-db", type=Path, default=ROOT / "outputs/demo_history.sqlite3")
@@ -155,7 +186,8 @@ def main():
     DemoHandler.registry = ModelRegistry(args.vit_checkpoint, args.efficientvit_checkpoint,
                                          vit_threshold=args.vit_threshold)
     DemoHandler.history = HistoryStore(args.history_db)
-    DemoHandler.batch = BatchRunner(DemoHandler.dataset, DemoHandler.registry, DemoHandler.history)
+    selection = DemoHandler.dataset.comparison_selection() if DemoHandler.dataset else None
+    DemoHandler.batch = BatchRunner(DemoHandler.dataset, DemoHandler.registry, DemoHandler.history, selection)
     handler = partial(DemoHandler, directory=str(ROOT / "demo/frontend"))
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     print(f"Demo available at http://127.0.0.1:{args.port}", flush=True)

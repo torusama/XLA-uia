@@ -1,6 +1,6 @@
 # Kiểm tra và chia dữ liệu BTXRD
 
-Nguồn: `data/raw/xla-seminar-uia/btxrd_final.zip`, revision `cf8b0569b18e43e7cecab412a06e60aeaf258b32` của [dataset Hugging Face](https://huggingface.co/datasets/torusama/xla-seminar-uia). SHA-256: `59ce94244fdf997f0c68e6a378690a4359e6c411f7fda7ac2f3994489637884b`.
+BoneScope tải `btxrd_final.zip` từ Kaggle và lưu ở `data/raw/xla-seminar-uia/`. Gói Kaggle giữ nguyên archive đóng gói từ Hugging Face revision `cf8b0569b18e43e7cecab412a06e60aeaf258b32`. SHA-256 của ZIP là `59ce94244fdf997f0c68e6a378690a4359e6c411f7fda7ac2f3994489637884b`. [Gói dữ liệu trên Kaggle](https://www.kaggle.com/datasets/vtan2405/bonescope-btxrd-splits) · [Dữ liệu gốc CC BY 4.0](https://api.figshare.com/v2/articles/27865398)
 
 ## Kiểm tra và chuẩn hóa
 
@@ -24,7 +24,11 @@ Vẫn có ảnh trùng byte trong cùng một split. Các split không chia sẻ
 
 ```powershell
 $env:PYTHONUTF8 = "1"
-python scripts/prepare_btxrd_splits.py --output data/splits/btxrd
+python scripts/prepare_btxrd_splits.py --output data/splits/btxrd-regenerated
 ```
 
-Lệnh train ViT dùng cùng hàm `make_splits` tạo manifest, không đọc CSV trực tiếp. Khi triển khai EfficientViT, dùng cùng danh sách hoặc cùng hàm này. Chỉ dùng validation để chọn model; giữ test cho bước đánh giá cuối.
+Các notebook tạo split từ archive bằng `make_splits`. Job ViT so trực tiếp với EfficientViT còn kiểm tra SHA-256 danh sách ảnh sau khi giới hạn train vào 1.302 mẫu có u, đúng như job EfficientViT gốc. Chọn checkpoint trên validation và chấm test sau khi chốt checkpoint.
+
+## Tập so sánh trên web
+
+BoneScope kiểm tra định dạng RGB 224×224, SHA-256 từng ảnh, kích thước annotation, tọa độ polygon, nhãn, mask và ảnh đồng nhất màu trước khi chạy model. Khi nhiều dòng có cùng SHA-256, giữ dòng hợp lệ đầu tiên theo manifest. Quy trình loại một bản trùng byte, còn 560 ảnh gồm 281 ảnh bình thường và 279 ảnh có u. Danh sách dùng chung cho hai model và được lưu trong `selection.json` của báo cáo ZIP.

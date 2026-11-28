@@ -1,0 +1,16 @@
+{
+  "id": "vtan2405/xla-btxrd-vit-lesion-crop-ab-20-epochs",
+  "title": "XLA BTXRD ViT Lesion Crop AB 20 Epochs",
+  "code_file": "vit_lesion_crop_ab.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "vtan2405/xla-btxrd-vit-improvement-ab-20-epochs"
+  ],
+  "model_sources": []
+}

@@ -1,96 +1,162 @@
-# ViT và EfficientViT cho ảnh X-quang
+<h1 align="center">BoneScope</h1>
 
-Repo phục vụ seminar về Vision Transformer (ViT) và EfficientViT trên ảnh X-quang. Thí nghiệm hiện tại tập trung vào **segmentation nhị phân vùng u xương trên BTXRD**; ViT và EfficientViT cần được đánh giá trên cùng dữ liệu và cùng split.
+<h3 align="center">Bone Tumor Segmentation &amp; Model Comparison Workspace</h3>
 
-## Trạng thái dự án
+<p align="center">
+  Explore bone tumor masks on X-rays and compare ViT and EfficientViT predictions, accuracy, and inference performance on BTXRD.
+</p>
 
-- Đã có ViT-B/16 từ `timm` với đầu segmentation do dự án bổ sung, loader polygon, huấn luyện, validation và đánh giá test.
-- Đã chuẩn bị notebook Kaggle chạy ViT trong 20 epoch và gửi lên [Kaggle](https://www.kaggle.com/code/vtan2405/xla-btxrd-vit-segmentation-20-epochs); xem trạng thái và Output trên Kaggle để biết kết quả thực tế.
-- Adapter ViT phân loại đã có, nhưng pipeline train classification và EfficientViT segmentation **chưa được triển khai**. Chưa có kết quả so sánh hai model.
+<p align="center">
+  <a href="README.md"><img alt="Language: English" src="https://img.shields.io/badge/LANGUAGE-ENGLISH-2563eb?style=for-the-badge"></a>
+  <a href="README.vi.md"><img alt="Ngôn ngữ: Tiếng Việt" src="https://img.shields.io/badge/NG%C3%94N%20NG%E1%BB%AE-TI%E1%BA%BENG%20VI%E1%BB%86T-20604a?style=for-the-badge"></a>
+</p>
 
-ViT gốc trong [paper của Dosovitskiy và cộng sự](https://arxiv.org/abs/2010.11929) được thiết kế cho phân loại ảnh. Đầu segmentation trong repo dùng patch token của ViT, thêm convolution và nội suy thành mask; đây là phần mở rộng của dự án. Backbone dùng [timm ViT-B/16 pretrained ImageNet-21k](https://huggingface.co/timm/vit_base_patch16_224.orig_in21k), không phải code JAX/Flax gốc của tác giả.
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3776AB?logo=python&amp;logoColor=white">
+  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&amp;logoColor=white">
+  <img alt="JavaScript" src="https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&amp;logoColor=black">
+  <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?logo=sqlite&amp;logoColor=white">
+  <img alt="Kaggle" src="https://img.shields.io/badge/Kaggle-147CB3?logo=kaggle&amp;logoColor=white">
+</p>
 
-## Dữ liệu BTXRD
+<p align="center"><strong>Digital Image Processing Seminar · BTXRD Bone Tumor Segmentation</strong></p>
 
-Dữ liệu lấy từ [torusama/xla-seminar-uia](https://huggingface.co/datasets/torusama/xla-seminar-uia), revision `cf8b0569b18e43e7cecab412a06e60aeaf258b32`. File `btxrd_final.zip` đã tải được lưu ở `data/raw/xla-seminar-uia/`; file này và các split cục bộ được Git bỏ qua.
+<p align="center">
+  <a href="#overview">Overview</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#gallery">Gallery</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#evaluation">Evaluation</a> ·
+  <a href="#documentation">Documentation</a>
+</p>
 
-Ảnh trong ZIP có kích thước 224 × 224 RGB. Loader tạo mask nhị phân từ polygon, chuẩn hóa ảnh bằng mean/std `0.5` và giữ mask ở dạng 0/1. Dựa trên split gốc, đã loại các ảnh có cùng hash nhưng nhãn mâu thuẫn, sau đó loại ảnh train trùng byte với validation hoặc test:
+---
 
-| Tập | Bình thường | Có u | Tổng |
-|---|---:|---:|---:|
-| Train | 1.311 | 1.302 | 2.613 |
+## Overview
+
+BoneScope compares **Vision Transformer (ViT-B/16)** and **EfficientViT-Seg-B1** for binary bone tumor segmentation. Both models predict a foreground mask from a 224 × 224 X-ray. The repository contains the training code, Kaggle notebooks, and a local browser demo that shows model predictions alongside ground truth.
+
+## Features
+
+- Browse 561 test images with polygon-derived ground truth and model overlays.
+- Compare Dice, IoU, latency, throughput, RAM, CPU, VRAM, parameter count, and GFLOPs on the same image.
+- Run both models on the same 560 quality-checked test images, track progress, and stop after the current image.
+- After a completed run, view the aggregate charts and download a ZIP with PNG charts, per-image CSV, summary data, and the exact test-image selection.
+- Filter SQLite-backed inference history by session or batch run, expand charts, and export CSV.
+
+## Gallery
+
+| ViT segmentation | EfficientViT segmentation |
+| --- | --- |
+| <a href="material/ViT-seg.png"><img src="material/ViT-seg.png" width="440" alt="ViT demo showing a knee X-ray, ground-truth mask, and predicted tumor overlay"></a> | <a href="material/EViT-seg.png"><img src="material/EViT-seg.png" width="440" alt="EfficientViT demo showing a shoulder X-ray, ground-truth mask, and predicted tumor overlay"></a> |
+
+| Live model comparison | Latency and throughput |
+| --- | --- |
+| <a href="material/chay-tung-fig-evit-vit.mp4"><img src="material/ViT-EViT-compare.png" width="440" alt="One X-ray shown alongside ground truth and both model predictions"></a> | <a href="material/vid-compare-vit-evit.mp4"><img src="material/latency.png" width="440" alt="Comparison of inference latency, p95 latency, and throughput"></a> |
+| [Watch both models segment successive images · 0:16](material/chay-tung-fig-evit-vit.mp4) | [Watch inference timing and throughput update · 0:52](material/vid-compare-vit-evit.mp4) |
+
+<details>
+<summary>More evaluation charts</summary>
+
+| Aggregate accuracy | Dice per tumor image |
+| --- | --- |
+| <a href="material/accuracy.png"><img src="material/accuracy.png" width="440" alt="Pooled Dice, pooled IoU, and false positives on normal images"></a> | <a href="material/paired-dice.png"><img src="material/paired-dice.png" width="224" alt="Scatter plot of ViT and EfficientViT Dice on each tumor image"></a> |
+| **Parameters and GFLOPs** | **Runtime resources** |
+| <a href="material/complexity.png"><img src="material/complexity.png" width="320" alt="Model parameter count and GFLOPs per forward pass"></a> | <a href="material/resources.png"><img src="material/resources.png" width="440" alt="RAM and CPU measurements, with VRAM unavailable in this CPU run"></a> |
+
+</details>
+
+## Architecture
+
+The local Python HTTP server reads the BTXRD archive, rasterizes polygon annotations, and runs PyTorch inference. The HTML, CSS, and JavaScript frontend fetches images, masks, and metrics through the API. SQLite stores run history in `outputs/demo_history.sqlite3`.
+
+<details>
+<summary>Repository tree</summary>
+
+```text
+start-web.ps1      Windows web launcher
+requirements.txt   Python dependencies for the demo and training
+demo/              Browser UI, HTTP API, and SQLite storage
+src/xla/           Data loaders, models, training loops, and Segmenter code
+scripts/           Data preparation, training, and notebook packaging
+notebooks/         Kaggle jobs and metadata
+configs/           Model, dataset, and experiment configuration
+data/              Local datasets and split manifests
+outputs/           Checkpoints, Kaggle results, and demo history
+docs/              Data protocol, experiments, and references
+material/          Demo screenshots and video clips
+paper/             Research papers
+tests/             Python tests
+```
+
+</details>
+
+## Quick Start
+
+Install Python 3.10 or newer. From the repository root on Windows, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-web.ps1
+```
+
+Open **http://127.0.0.1:8765** when the server reports that it is ready. Press **Ctrl+C** to stop it. Add `-Port 8766` if the default port is busy.
+
+The launcher creates or reuses a Python environment and keeps compatible packages, including existing CPU or CUDA PyTorch builds. On the first run it downloads the BTXRD archive, test manifest, and both model checkpoints from Kaggle (about 410 MB total, plus any missing Python packages). It checks SHA-256 and reuses verified files on later runs. **Internet access is required for the first run. A Kaggle account or CLI is optional.** [Python requirements](requirements.txt)
+
+| Public Kaggle release | Contents |
+| --- | --- |
+| [BTXRD dataset and splits](https://www.kaggle.com/datasets/vtan2405/bonescope-btxrd-splits) | Image and mask annotation archive, train/validation/test manifests, and the matched 1,302-image tumor-only training manifest |
+| [ViT and EfficientViT checkpoints](https://www.kaggle.com/datasets/vtan2405/bonescope-btxrd-checkpoints) | The two PyTorch weight files used by the web demo |
+
+| Demo model | Default checkpoint |
+| --- | --- |
+| ViT-B/16 with convolutional skip connections | `outputs/kaggle_checks/vit-detail/best_vit_detail.pt` · epoch 32 · threshold 0.5 |
+| EfficientViT-Seg-B1 | `outputs/kaggle_checks/efficientvit/best_evit_seg_btxrd.pth` · threshold 0.5 |
+
+The archive is cached under `data/raw/` and the test manifest under `data/splits/`. Git ignores downloaded weights, dataset files, and generated reports. To override a checkpoint, set `XLA_VIT_CHECKPOINT` or `XLA_EFFICIENTVIT_CHECKPOINT`.
+
+## Evaluation
+
+### Dataset
+
+Kaggle version 2 stores the exact `btxrd_final.zip` archive as `btxrd_final.bin` to preserve its checksum. The launcher restores the `.zip` extension locally. The archive comes from Hugging Face revision `cf8b0569b18e43e7cecab412a06e60aeaf258b32`. The manifests exclude byte-identical images with conflicting labels and training images duplicated in held-out sets. The original BTXRD dataset is published by Yao et al. under CC BY 4.0. [Original dataset record](https://api.figshare.com/v2/articles/27865398) · [Split protocol](docs/btxrd_data.md)
+
+| Split after filtering | Normal | Tumor | Total |
+| --- | ---: | ---: | ---: |
+| Train | 1,311 | 1,302 | 2,613 |
 | Validation | 282 | 280 | 562 |
 | Test | 281 | 280 | 561 |
 
-Manifest nằm trong `data/splits/btxrd/`, gồm `train.csv`, `val.csv`, `test.csv`, `excluded.csv` và `audit.json`. Không đủ thông tin để xác nhận split tách biệt theo bệnh nhân; kiểm tra hash cũng không phát hiện bản sao đã mã hóa lại. Xem [báo cáo dữ liệu](docs/btxrd_data.md) để biết cách kiểm tra và tái tạo manifest.
+### Kaggle results
 
-FracAtlas cũng có trong dataset Hugging Face, nhưng file `fracatlas_final.zip` của bản này chỉ chứa ảnh gãy xương có annotation. BTXRD là bộ dữ liệu được chọn cho thí nghiệm hiện tại.
+The head-to-head experiment used the same **1,302 tumor-positive training images**, full validation and test sets, and threshold 0.5 with horizontal-flip test-time augmentation. EfficientViT led by 3.53 percentage points in Dice and 4.33 points in IoU. The earlier Mask Transformer score comes from validation. [Comparison output](https://www.kaggle.com/code/vtan2405/xla-btxrd-vit-detail-vs-efficientvit/output)
 
-## Cài đặt
+| Experiment | Split | Pixel micro Dice | Pixel micro IoU |
+| --- | --- | ---: | ---: |
+| EfficientViT-Seg-B1 | Test | **0.7404** | **0.5878** |
+| ViT-B/16 with convolutional skip connections | Test | 0.7051 | 0.5445 |
+| ViT-B/16 + Mask Transformer, threshold 0.7 | Validation | 0.6238 | 0.4533 |
 
-Khuyến nghị Python 3.10 hoặc 3.11. Cài phiên bản PyTorch/torchvision CPU hoặc CUDA phù hợp theo [hướng dẫn PyTorch](https://pytorch.org/get-started/locally/). Ví dụ PowerShell tại thư mục repo:
+The demo uses one forward pass per model per image. It reports per-image Dice and IoU. When both masks are empty, each score is 1. Batch runs also report pixel-pooled Dice and IoU. Latency measures the forward pass. RAM uses process RSS, VRAM uses PyTorch tensor allocations, and GFLOPs reflect operators supported by the PyTorch counter.
+
+Before a demo batch run, the backend checks image decoding, dimensions, SHA-256, annotation and mask consistency, and byte-level duplicates. The current selection contains 279 tumor images and 281 normal images. The browser and ZIP share the same Matplotlib charts.
+
+## Documentation
+
+| Guide | Contents |
+| --- | --- |
+| [BTXRD data protocol](docs/btxrd_data.md) | Dataset revision, duplicate filtering, and split generation |
+| [Experiments](docs/experiments.md) | Training configurations, Kaggle notebooks, and results |
+| [Sources and licenses](docs/sources.md) | Papers, models, and upstream licenses |
+
+### Development
 
 ```powershell
 $env:PYTHONUTF8 = "1"
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-# Install an appropriate PyTorch and torchvision build first.
-python -m pip install -e ".[dev,vit]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m xla doctor
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Lần đầu train với pretrained backbone, `timm` cần Internet để tải weights. Các checkpoint chỉ chứa trọng số model và metadata, không chứa trạng thái optimizer để tiếp tục train.
-
-## Train và đánh giá ViT
-
-Train cục bộ trên BTXRD; thư mục output phải chưa tồn tại:
-
-```powershell
-python scripts/train_vit_segmentation.py train --archive data/raw/xla-seminar-uia/btxrd_final.zip --output outputs/vit_btxrd_run1 --epochs 20 --batch-size 4 --learning-rate 0.0001
-```
-
-Lệnh tự chọn CUDA khi có GPU, nếu không dùng CPU. Giảm batch size nếu GPU thiếu bộ nhớ. `best.pt` là checkpoint có Dice validation tốt nhất; `final.pt` được lưu sau epoch cuối. `history.json` và `config.json` ghi lại quá trình và cấu hình.
-
-Sau khi chọn model bằng validation, đánh giá trên test:
-
-```powershell
-python scripts/train_vit_segmentation.py evaluate --archive data/raw/xla-seminar-uia/btxrd_final.zip --checkpoint outputs/vit_btxrd_run1/best.pt --batch-size 4
-```
-
-Lệnh kiểm tra checksum của ZIP và báo loss, Dice và IoU foreground. Không so sánh trực tiếp metric segmentation với metric classification.
-
-## Kaggle
-
-Notebook [BTXRD ViT segmentation](notebooks/kaggle_btxrd_vit/btxrd_vit_segmentation.ipynb) chứa bản sao code cần thiết, tự tải đúng revision dataset và kiểm tra SHA-256. Cấu hình job dùng GPU, 20 epoch và lưu kết quả trong `/kaggle/working/btxrd_vit_20e/`. Sau khi job hoàn tất, tải `best.pt`, `final.pt`, `history.json` và `config.json` từ Output của notebook.
-
-## Giao diện demo
-
-Tab **So sánh** có từng panel riêng cho thời gian, tốc độ, Dice/IoU, RAM/CPU, VRAM, tham số và GFLOPs bên dưới bảng chỉ số; mỗi panel có nút **Xem lớn** và bảng số đo chi tiết. Các lượt chạy được lưu bằng SQLite (`outputs/demo_history.sqlite3`) và biểu đồ tự cập nhật. Nút **So sánh toàn bộ 561 ảnh** chỉ chạy khi người dùng bấm, có tiến độ, dừng sau ảnh hiện tại và lọc kết quả theo tác vụ; không tự khởi chạy khi mở web. Cài extra `demo` để đo RAM bằng `psutil`; xem cách dùng và giới hạn phép đo tại [demo/README.md](demo/README.md).
-
-Thử nghiệm cải tiến ViT hiện có hai nhánh fine-tune có đối chứng trên validation; xem [cấu hình và tiêu chí chọn model](docs/vit/improvement_ab.md). Không coi checkpoint mới là tốt hơn cho đến khi đọc kết quả validation.
-
-Chạy `python -m demo.backend.server`, sau đó mở `http://127.0.0.1:8765`. Giao diện lấy ảnh test BTXRD, hiển thị ground truth và cho chuyển ảnh. Có thể nạp checkpoint ViT bằng `--vit-checkpoint`; EfficientViT cần được triển khai trước khi kết nối. Xem [demo/README.md](demo/README.md) để biết cấu trúc, cách chạy và ý nghĩa các chỉ số.
-
-Checkpoint từ job ViT 20 epoch đã tải về `outputs/kaggle_vit_20e/btxrd_vit_20e/best.pt`; Dice validation bằng 0 ở cả 20 epoch. Có thể dùng file này kiểm tra luồng demo, nhưng chưa có kết quả phân vùng tốt.
-
-## Kiểm tra và cấu trúc
-
-```powershell
-python -m xla doctor
-python -m pytest -q
-python -m ruff check .
-```
-
-Test dùng dữ liệu tổng hợp và không cần GPU, dataset hoặc Internet. Kiểm tra bằng model khởi tạo ngẫu nhiên là kiểm tra kỹ thuật, không phải kết quả thực nghiệm.
-
-```text
-src/xla/       Model, loader, engine và CLI
-scripts/       Chuẩn bị split, train và đánh giá
-notebooks/     Notebook và metadata Kaggle
-data/          Dataset và manifest cục bộ, không commit
-outputs/       Checkpoint và output cục bộ, không commit
-docs/          Tài liệu, nguồn tham khảo và giao thức
-tests/         Kiểm thử offline
-paper/         Paper tham khảo của dự án
-```
-
-Xem thêm [hướng dẫn ViT segmentation](docs/vit/segmentation.md) và [danh mục nguồn](docs/references/source_registry.md).
+Run `python -m demo.build_site` with the local dataset to build a static demo with images and ground truth.

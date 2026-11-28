@@ -11,8 +11,12 @@ import types
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .dataset import EXPECTED_ARCHIVE_SHA256, png_bytes
+from .dataset import EXPECTED_ARCHIVE_SHA256, ROOT, png_bytes
 from .resources import ResourceMonitor
+
+DEFAULT_VIT_CHECKPOINT = ROOT / "outputs/kaggle_checks/vit-detail/best_vit_detail.pt"
+DEFAULT_EFFICIENTVIT_CHECKPOINT = ROOT / "outputs/kaggle_checks/efficientvit/best_evit_seg_btxrd.pth"
+DETAIL_VIT_ARCHITECTURE = "DetailViT"
 
 
 def checkpoint_digest(path):
@@ -90,11 +94,16 @@ class ModelRegistry:
             checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
             if checkpoint.get("archive_sha256") != EXPECTED_ARCHIVE_SHA256:
                 raise ValueError("Checkpoint không thuộc phiên bản BTXRD này")
-            architecture = checkpoint.get("settings", {}).get("architecture")
-            if architecture == "segmenter_vit_mask_transformer":
+            settings = checkpoint.get("settings", {})
+            architecture = checkpoint.get("architecture") or settings.get("architecture")
+            if architecture == DETAIL_VIT_ARCHITECTURE:
+                from xla.models.vit_detail import DetailViT
+
+                model = DetailViT(pretrained=False)
+            elif architecture == "segmenter_vit_mask_transformer":
                 from xla.models.segmenter_vit import SegmenterViT
 
-                mask_norm_eps = checkpoint.get("settings", {}).get("mask_norm_eps", 1e-5)
+                mask_norm_eps = settings.get("mask_norm_eps", 1e-5)
                 model = SegmenterViT(pretrained=False, mask_norm_eps=mask_norm_eps)
             elif architecture == "segmenter_official_mask_transformer":
                 from xla.models.segmenter_official import OfficialSegmenter
@@ -183,7 +192,8 @@ class ModelRegistry:
         from torchvision.transforms import functional as TF
 
         model = self.models[name]
-        if name == "efficientvit":
+        architecture = self.model_metadata.get(name, {}).get("architecture")
+        if name == "efficientvit" or architecture == DETAIL_VIT_ARCHITECTURE:
             tensor = TF.normalize(TF.to_tensor(image), (0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         else:
             tensor = TF.normalize(TF.to_tensor(image), (0.5, 0.5, 0.5), (0.5, 0.5, 0.5))

@@ -156,6 +156,29 @@ def test_load_segmenter_checkpoint(tmp_path, monkeypatch):
     assert ModelRegistry(checkpoint).statuses()["vit"]["ready"]
 
 
+def test_detail_vit_checkpoint_uses_imagenet_normalization(tmp_path, monkeypatch):
+    from xla.models import vit_detail
+
+    class Model(nn.Conv2d):
+        def forward(self, tensor):
+            self.input = tensor
+            return super().forward(tensor)
+
+    model = Model(3, 1, 1)
+    monkeypatch.setattr(vit_detail, "DetailViT", lambda *, pretrained: model)
+    checkpoint = tmp_path / "best_vit_detail.pt"
+    torch.save({"model": model.state_dict(), "archive_sha256": EXPECTED_ARCHIVE_SHA256,
+                "architecture": "DetailViT"}, checkpoint)
+    registry = ModelRegistry(checkpoint)
+    image, mask = Image.new("RGB", (16, 16), (128, 128, 128)), Image.new("L", (16, 16))
+    result = registry.infer("vit", image, mask)
+    assert result["ready"]
+    assert result["measurement_config"]["architecture"] == "DetailViT"
+    assert result["measurement_config"]["threshold"] == 0.5
+    expected = (128 / 255 - torch.tensor([0.485, 0.456, 0.406])) / torch.tensor([0.229, 0.224, 0.225])
+    torch.testing.assert_close(model.input[0, :, 0, 0].cpu(), expected)
+
+
 def test_load_official_segmenter_checkpoint(tmp_path, monkeypatch):
     from xla.models import segmenter_official
 

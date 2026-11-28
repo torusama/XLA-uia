@@ -22,3 +22,22 @@ def test_audit_rejects_bad_shape():
     audit = ThresholdAudit([0.5])
     with pytest.raises(ValueError, match="same shape"):
         audit.update(torch.zeros(1, 2), torch.zeros(1, 3))
+
+
+def test_size_groups_separate_small_large_and_normal_images():
+    truth = torch.zeros(3, 1, 20, 20)
+    truth[0, 0, 0, :2] = 1
+    truth[1, 0, :16, :16] = 1
+    pred = truth.clone()
+    pred[0, 0, 0, 1] = 0
+    pred[2, 0, 0, 0] = 1
+    audit = ThresholdAudit([0.5])
+    for index in range(3):
+        audit.update(pred[index:index+1], truth[index:index+1])
+    result = audit.results()[0]
+    small, other = result["positive_size_groups"].values()
+    assert small["images"] == other["images"] == 1
+    assert small["micro_dice"] == pytest.approx(2/3)
+    assert small["mean_image_dice"] == pytest.approx(2/3)
+    assert other["micro_dice"] == other["mean_image_dice"] == 1
+    assert result["normal_images_with_prediction"] == 1

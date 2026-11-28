@@ -1,3 +1,0 @@
-# Quy tr?nh d? li?u
-
-X?c minh taxonomy v? mapping theo ngu?n th?c t?. C? ??nh manifest train/validation/test; ki?m tra ?nh tr?ng v? patient overlap khi metadata cho ph?p, ghi r? gi?i h?n n?u thi?u patient ID. Ki?m tra alignment, orientation v? mask r?ng tr??c segmentation; kh?ng chuy?n annotation th?nh nh?n ph?n lo?i khi ch?a x?c minh.
