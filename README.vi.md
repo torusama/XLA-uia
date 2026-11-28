@@ -53,11 +53,15 @@ BoneScope là project seminar so sánh **Vision Transformer (ViT-B/16)** và **E
 
 ### Phân vùng qua từng ảnh · 0:16
 
-https://github.com/user-attachments/assets/24bda40b-7fbb-4bfb-87da-bf70212f1c23
+![Ảnh động lặp lại cảnh ViT và EfficientViT lần lượt phân vùng trên nhiều ảnh X-quang](material/live-segmentation-loop.webp)
+
+[Video MP4 gốc](material/chay-tung-fig-evit-vit.mp4)
 
 ### Lịch sử độ trễ và tốc độ xử lý · 0:52
 
-https://github.com/user-attachments/assets/a72c0550-4f4a-45c3-bf21-6f7f0406bba8
+![Ảnh động lặp lại cảnh biểu đồ độ trễ và tốc độ cập nhật qua từng lượt chạy](material/inference-history-loop.webp)
+
+[Video MP4 gốc](material/vid-compare-vit-evit.mp4)
 
 ### Biểu đồ đánh giá
 
@@ -76,52 +80,50 @@ Cả hai mô hình nhận ảnh X-quang RGB 224 × 224 đã chuẩn hóa theo Im
 ### ViT-B/16 với kết nối tắt tích chập
 
 ```mermaid
+---
+config:
+  htmlLabels: false
+  flowchart:
+    htmlLabels: false
+---
 flowchart LR
-    I["Ảnh X-quang RGB · 224×224×3<br/>Chuẩn hóa ImageNet"]
-    subgraph V["Encoder ViT-B/16"]
-        direction TB
-        P["Chiếu patch 16×16<br/>196 token × 768"] --> T["CLS + mã hóa vị trí<br/>12 khối Transformer · 12 head"]
-        T --> C["Bỏ CLS · đổi dạng tensor<br/>Chiếu 1×1 · 14×14×128"]
-    end
-    subgraph S["Nhánh tích chập"]
-        direction TB
-        S1["Conv stride 2 · 112×112×24"] --> S2["Conv stride 2 · 56×56×48"]
-        S2 --> S3["Conv stride 2 · 28×28×64"]
-    end
-    subgraph D["Decoder"]
-        direction TB
-        D1["Nội suy + nối đặc trưng 28×28<br/>Conv 3×3 · 28×28×96"] --> D2["Nội suy + nối đặc trưng 56×56<br/>Conv 3×3 · 56×56×64"]
-        D2 --> D3["Nội suy + nối đặc trưng 112×112<br/>Conv 3×3 · 112×112×32"]
-        D3 --> L["Đầu mask 1×1 · logit 112×112×1"]
-    end
-    I --> V --> D
-    I --> S --> D
-    D --> O["Nội suy bilinear · sigmoid<br/>Mask 224×224 · ngưỡng 0,5"]
+    I["X-quang RGB"] --> P["Patch 16×16"] --> V["Encoder ViT"] --> D["Ghép đặc trưng"]
+    I --> S["Nhánh conv"] --> D
+    D --> H["Đầu mask"] --> O["Mask 224×224"]
 ```
 
-Encoder học quan hệ giữa các patch. Decoder kết hợp ngữ cảnh đó với đặc trưng ảnh có độ phân giải cao hơn ở ba mức. Mỗi khối trích chi tiết hoặc kết hợp đặc trưng gồm tích chập 3×3, GroupNorm và GELU. [Mã ViT](src/xla/models/vit_detail.py)
+| Bước | Xử lý |
+| --- | --- |
+| Tạo patch và mã hóa | Tạo 196 token patch, mỗi token có 768 chiều. Thêm CLS và embedding vị trí, rồi chạy 12 khối Transformer với 12 head. |
+| Chiếu ngữ cảnh | Bỏ CLS, đưa token về lưới 14×14 rồi dùng tích chập 1×1 để còn 128 kênh. |
+| Nhánh conv | Trích đặc trưng trực tiếp từ ảnh bằng tích chập stride 2, lần lượt tạo tensor 112×112×24, 56×56×48 và 28×28×64. |
+| Ghép đặc trưng | Nội suy bilinear rồi nối kênh ở ba mức. Đầu ra lần lượt là 28×28×96, 56×56×64 và 112×112×32. Mỗi khối ghép dùng conv 3×3, GroupNorm và GELU. |
+| Đầu mask | Tích chập 1×1 tạo logit 112×112×1 rồi nội suy bilinear về kích thước ảnh. |
+
+[Mã ViT](src/xla/models/vit_detail.py)
 
 ### EfficientViT-Seg-B1
 
 ```mermaid
+---
+config:
+  htmlLabels: false
+  flowchart:
+    htmlLabels: false
+---
 flowchart LR
-    I["Ảnh X-quang RGB · 224×224×3<br/>Chuẩn hóa ImageNet"]
-    subgraph B["Backbone EfficientViT-B1"]
-        direction TB
-        S01["Stem + stage 1<br/>112×112×16 → 56×56×32"] --> S2["Stage 2 · 3 MBConv<br/>28×28×64"]
-        S2 --> S3["Stage 3 · 3 khối EfficientViT<br/>14×14×128"]
-        S3 --> S4["Stage 4 · 4 khối EfficientViT<br/>7×7×256"]
-    end
-    subgraph H["Đầu phân vùng"]
-        direction TB
-        P["Chiếu 1×1 ở stage 2, 3, 4<br/>Nội suy theo hệ số 1×, 2×, 4×"] --> F["Cộng theo phần tử · 28×28×64"]
-        F --> M["3 MBConv có nối tắt"]
-        M --> L["Đầu mask 1×1 · logit 28×28×1"]
-    end
-    I --> B --> H --> O["Nội suy bilinear · sigmoid<br/>Mask 224×224 · ngưỡng 0,5"]
+    I["X-quang RGB"] --> B["Backbone B1"] --> P["Stage 2–4"]
+    P --> F["Cộng đặc trưng"] --> H["Đầu mask"] --> O["Mask 224×224"]
 ```
 
-Stage 3 và 4 bắt đầu bằng một MBConv giảm độ phân giải. Các khối EfficientViT kết hợp chú ý tuyến tính đa tỉ lệ LiteMLA với MBConv. Đầu segmentation đưa đầu ra của stage 2–4 về cùng kích thước ở stride 8, cộng đặc trưng rồi dự đoán một logit vùng u tại mỗi vị trí. [Adapter của demo](demo/backend/models.py) · [Mã đầu segmentation tại commit đã ghim](https://github.com/mit-han-lab/efficientvit/blob/de7d7733cc0329f391b33f1f459271562ec27bd5/efficientvit/models/efficientvit/seg.py)
+| Bước | Xử lý |
+| --- | --- |
+| Stem và stage 1 | Trích đặc trưng 112×112×16 rồi giảm xuống 56×56×32. |
+| Stage 2–4 | Tạo đầu ra 28×28×64, 14×14×128 và 7×7×256. Stage 2 có ba MBConv. Stage 3 và 4 mở đầu bằng MBConv giảm kích thước, sau đó có lần lượt ba và bốn khối EfficientViT kết hợp LiteMLA với MBConv. |
+| Cộng đặc trưng | Chiếu cả ba đầu ra về 64 kênh bằng conv 1×1, nội suy theo hệ số 1×, 2×, 4× rồi cộng ở kích thước 28×28. |
+| Đầu mask | Ba khối MBConv có nối tắt và conv 1×1 tạo logit 28×28×1, sau đó nội suy bilinear về kích thước ảnh. |
+
+[Adapter của demo](demo/backend/models.py) · [Mã đầu segmentation tại commit đã ghim](https://github.com/mit-han-lab/efficientvit/blob/de7d7733cc0329f391b33f1f459271562ec27bd5/efficientvit/models/efficientvit/seg.py)
 
 ### Cây thư mục
 
