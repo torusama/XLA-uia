@@ -51,28 +51,79 @@ BoneScope compares **Vision Transformer (ViT-B/16)** and **EfficientViT-Seg-B1**
 | --- | --- |
 | <a href="material/ViT-seg.png"><img src="material/ViT-seg.png" width="440" alt="ViT demo showing a knee X-ray, ground-truth mask, and predicted tumor overlay"></a> | <a href="material/EViT-seg.png"><img src="material/EViT-seg.png" width="440" alt="EfficientViT demo showing a shoulder X-ray, ground-truth mask, and predicted tumor overlay"></a> |
 
-| Live model comparison | Latency and throughput |
-| --- | --- |
-| <a href="material/chay-tung-fig-evit-vit.mp4"><img src="material/ViT-EViT-compare.png" width="440" alt="One X-ray shown alongside ground truth and both model predictions"></a> | <a href="material/vid-compare-vit-evit.mp4"><img src="material/latency.png" width="440" alt="Comparison of inference latency, p95 latency, and throughput"></a> |
-| [Watch both models segment successive images · 0:16](material/chay-tung-fig-evit-vit.mp4) | [Watch inference timing and throughput update · 0:52](material/vid-compare-vit-evit.mp4) |
+### Live segmentation · 0:16
 
-<details>
-<summary>More evaluation charts</summary>
+https://github.com/user-attachments/assets/24bda40b-7fbb-4bfb-87da-bf70212f1c23
+
+### Inference history · 0:52
+
+https://github.com/user-attachments/assets/a72c0550-4f4a-45c3-bf21-6f7f0406bba8
+
+### Evaluation charts
 
 | Aggregate accuracy | Dice per tumor image |
 | --- | --- |
 | <a href="material/accuracy.png"><img src="material/accuracy.png" width="440" alt="Pooled Dice, pooled IoU, and false positives on normal images"></a> | <a href="material/paired-dice.png"><img src="material/paired-dice.png" width="224" alt="Scatter plot of ViT and EfficientViT Dice on each tumor image"></a> |
-| **Parameters and GFLOPs** | **Runtime resources** |
-| <a href="material/complexity.png"><img src="material/complexity.png" width="320" alt="Model parameter count and GFLOPs per forward pass"></a> | <a href="material/resources.png"><img src="material/resources.png" width="440" alt="RAM and CPU measurements, with VRAM unavailable in this CPU run"></a> |
-
-</details>
+| **Latency and throughput** | **Runtime resources** |
+| <a href="material/latency.png"><img src="material/latency.png" width="440" alt="Latency distribution, p95 latency, and forward throughput"></a> | <a href="material/resources.png"><img src="material/resources.png" width="440" alt="RAM and CPU measurements, with VRAM unavailable in this CPU run"></a> |
+| **Parameters and GFLOPs** | **Side-by-side predictions** |
+| <a href="material/complexity.png"><img src="material/complexity.png" width="320" alt="Model parameter count and GFLOPs per forward pass"></a> | <a href="material/ViT-EViT-compare.png"><img src="material/ViT-EViT-compare.png" width="440" alt="One X-ray with ground truth and predictions from both models"></a> |
 
 ## Architecture
 
-The local Python HTTP server reads the BTXRD archive, rasterizes polygon annotations, and runs PyTorch inference. The HTML, CSS, and JavaScript frontend fetches images, masks, and metrics through the API. SQLite stores run history in `outputs/demo_history.sqlite3`.
+Both models take a 224 × 224 RGB X-ray with ImageNet normalization. The demo resizes each model's logits to 224 × 224, applies sigmoid, and thresholds at 0.5. The backend compares the masks against the rasterized BTXRD polygons, sends overlays and metrics to the browser, and stores measurements in SQLite.
 
-<details>
-<summary>Repository tree</summary>
+### ViT-B/16 with convolutional skip connections
+
+```mermaid
+flowchart LR
+    I["RGB X-ray · 224×224×3<br/>ImageNet normalization"]
+    subgraph V["ViT-B/16 encoder"]
+        direction TB
+        P["16×16 patch projection<br/>196 tokens × 768"] --> T["CLS + position embeddings<br/>12 Transformer blocks · 12 heads"]
+        T --> C["Drop CLS · reshape<br/>1×1 projection · 14×14×128"]
+    end
+    subgraph S["Convolutional skips"]
+        direction TB
+        S1["Stride-2 conv · 112×112×24"] --> S2["Stride-2 conv · 56×56×48"]
+        S2 --> S3["Stride-2 conv · 28×28×64"]
+    end
+    subgraph D["Decoder"]
+        direction TB
+        D1["Resize + concat 28×28 skip<br/>3×3 conv · 28×28×96"] --> D2["Resize + concat 56×56 skip<br/>3×3 conv · 56×56×64"]
+        D2 --> D3["Resize + concat 112×112 skip<br/>3×3 conv · 112×112×32"]
+        D3 --> L["1×1 mask head · 112×112×1 logits"]
+    end
+    I --> V --> D
+    I --> S --> D
+    D --> O["Bilinear resize · sigmoid<br/>224×224 mask · threshold 0.5"]
+```
+
+The encoder models relationships between patches. The decoder fuses that context with higher-resolution features from the image at three scales. Each detail and fusion block uses a 3×3 convolution, GroupNorm, and GELU. [ViT implementation](src/xla/models/vit_detail.py)
+
+### EfficientViT-Seg-B1
+
+```mermaid
+flowchart LR
+    I["RGB X-ray · 224×224×3<br/>ImageNet normalization"]
+    subgraph B["EfficientViT-B1 backbone"]
+        direction TB
+        S01["Stem + stage 1<br/>112×112×16 → 56×56×32"] --> S2["Stage 2 · 3 MBConv<br/>28×28×64"]
+        S2 --> S3["Stage 3 · 3 EfficientViT blocks<br/>14×14×128"]
+        S3 --> S4["Stage 4 · 4 EfficientViT blocks<br/>7×7×256"]
+    end
+    subgraph H["Segmentation head"]
+        direction TB
+        P["1×1 projection at stages 2, 3, 4<br/>Resize by 1×, 2×, 4×"] --> F["Elementwise sum · 28×28×64"]
+        F --> M["3 residual MBConv"]
+        M --> L["1×1 mask head · 28×28×1 logits"]
+    end
+    I --> B --> H --> O["Bilinear resize · sigmoid<br/>224×224 mask · threshold 0.5"]
+```
+
+Stages 3 and 4 each start with a downsampling MBConv. The EfficientViT blocks combine lightweight multiscale linear attention (LiteMLA) with MBConv. The segmentation head aligns stages 2–4 at stride 8 and adds their features before predicting one foreground logit per location. [Demo adapter](demo/backend/models.py) · [Pinned upstream segmentation head](https://github.com/mit-han-lab/efficientvit/blob/de7d7733cc0329f391b33f1f459271562ec27bd5/efficientvit/models/efficientvit/seg.py)
+
+### Repository tree
 
 ```text
 start-web.ps1      Windows web launcher
@@ -89,8 +140,6 @@ material/          Demo screenshots and video clips
 paper/             Research papers
 tests/             Python tests
 ```
-
-</details>
 
 ## Quick Start
 

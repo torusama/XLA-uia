@@ -51,28 +51,79 @@ BoneScope là project seminar so sánh **Vision Transformer (ViT-B/16)** và **E
 | --- | --- |
 | <a href="material/ViT-seg.png"><img src="material/ViT-seg.png" width="440" alt="Ảnh X-quang gối, mask ground truth và vùng u ViT dự đoán"></a> | <a href="material/EViT-seg.png"><img src="material/EViT-seg.png" width="440" alt="Ảnh X-quang vai, mask ground truth và vùng u EfficientViT dự đoán"></a> |
 
-| So sánh trực tiếp hai mô hình | Độ trễ và tốc độ xử lý |
-| --- | --- |
-| <a href="material/chay-tung-fig-evit-vit.mp4"><img src="material/ViT-EViT-compare.png" width="440" alt="Một ảnh X-quang đặt cạnh ground truth và dự đoán của hai mô hình"></a> | <a href="material/vid-compare-vit-evit.mp4"><img src="material/latency.png" width="440" alt="Biểu đồ độ trễ suy luận, p95 và thông lượng của hai mô hình"></a> |
-| [Xem hai mô hình phân vùng qua từng ảnh · 0:16](material/chay-tung-fig-evit-vit.mp4) | [Xem độ trễ và tốc độ cập nhật qua các lượt · 0:52](material/vid-compare-vit-evit.mp4) |
+### Phân vùng qua từng ảnh · 0:16
 
-<details>
-<summary>Xem thêm biểu đồ đánh giá</summary>
+https://github.com/user-attachments/assets/24bda40b-7fbb-4bfb-87da-bf70212f1c23
+
+### Lịch sử độ trễ và tốc độ xử lý · 0:52
+
+https://github.com/user-attachments/assets/a72c0550-4f4a-45c3-bf21-6f7f0406bba8
+
+### Biểu đồ đánh giá
 
 | Độ chính xác tổng hợp | Dice trên từng ảnh có u |
 | --- | --- |
 | <a href="material/accuracy.png"><img src="material/accuracy.png" width="440" alt="Dice và IoU pixel gộp cùng tỷ lệ tô nhầm trên ảnh bình thường"></a> | <a href="material/paired-dice.png"><img src="material/paired-dice.png" width="224" alt="Biểu đồ phân tán Dice của ViT và EfficientViT trên từng ảnh có u"></a> |
-| **Số tham số và GFLOPs** | **Tài nguyên suy luận** |
-| <a href="material/complexity.png"><img src="material/complexity.png" width="320" alt="Số tham số và GFLOPs mỗi lần suy luận của hai mô hình"></a> | <a href="material/resources.png"><img src="material/resources.png" width="440" alt="Mức sử dụng RAM và CPU, lượt đo CPU không có dữ liệu VRAM"></a> |
-
-</details>
+| **Độ trễ và tốc độ xử lý** | **Tài nguyên suy luận** |
+| <a href="material/latency.png"><img src="material/latency.png" width="440" alt="Phân bố độ trễ, độ trễ p95 và số ảnh xử lý mỗi giây"></a> | <a href="material/resources.png"><img src="material/resources.png" width="440" alt="Mức sử dụng RAM và CPU, lượt đo CPU không có dữ liệu VRAM"></a> |
+| **Số tham số và GFLOPs** | **So sánh mask trên cùng ảnh** |
+| <a href="material/complexity.png"><img src="material/complexity.png" width="320" alt="Số tham số và GFLOPs mỗi lần suy luận của hai mô hình"></a> | <a href="material/ViT-EViT-compare.png"><img src="material/ViT-EViT-compare.png" width="440" alt="Một ảnh X-quang cùng ground truth và dự đoán của hai mô hình"></a> |
 
 ## Kiến trúc
 
-Server HTTP cục bộ đọc ảnh và annotation từ BTXRD, raster hóa polygon thành mask ground truth và gọi mô hình PyTorch. Giao diện HTML/CSS/JavaScript lấy ảnh, dự đoán và chỉ số qua API. SQLite lưu lịch sử suy luận và kết quả chạy theo lô.
+Cả hai mô hình nhận ảnh X-quang RGB 224 × 224 đã chuẩn hóa theo ImageNet. Demo nội suy logit lên 224 × 224, áp sigmoid rồi lấy ngưỡng 0,5 để tạo mask. Backend so mask dự đoán với polygon BTXRD đã raster hóa, gửi lớp phủ và chỉ số lên web, rồi lưu kết quả vào SQLite.
 
-<details>
-<summary>Cây thư mục</summary>
+### ViT-B/16 với kết nối tắt tích chập
+
+```mermaid
+flowchart LR
+    I["Ảnh X-quang RGB · 224×224×3<br/>Chuẩn hóa ImageNet"]
+    subgraph V["Encoder ViT-B/16"]
+        direction TB
+        P["Chiếu patch 16×16<br/>196 token × 768"] --> T["CLS + mã hóa vị trí<br/>12 khối Transformer · 12 head"]
+        T --> C["Bỏ CLS · đổi dạng tensor<br/>Chiếu 1×1 · 14×14×128"]
+    end
+    subgraph S["Nhánh tích chập"]
+        direction TB
+        S1["Conv stride 2 · 112×112×24"] --> S2["Conv stride 2 · 56×56×48"]
+        S2 --> S3["Conv stride 2 · 28×28×64"]
+    end
+    subgraph D["Decoder"]
+        direction TB
+        D1["Nội suy + nối đặc trưng 28×28<br/>Conv 3×3 · 28×28×96"] --> D2["Nội suy + nối đặc trưng 56×56<br/>Conv 3×3 · 56×56×64"]
+        D2 --> D3["Nội suy + nối đặc trưng 112×112<br/>Conv 3×3 · 112×112×32"]
+        D3 --> L["Đầu mask 1×1 · logit 112×112×1"]
+    end
+    I --> V --> D
+    I --> S --> D
+    D --> O["Nội suy bilinear · sigmoid<br/>Mask 224×224 · ngưỡng 0,5"]
+```
+
+Encoder học quan hệ giữa các patch. Decoder kết hợp ngữ cảnh đó với đặc trưng ảnh có độ phân giải cao hơn ở ba mức. Mỗi khối trích chi tiết hoặc kết hợp đặc trưng gồm tích chập 3×3, GroupNorm và GELU. [Mã ViT](src/xla/models/vit_detail.py)
+
+### EfficientViT-Seg-B1
+
+```mermaid
+flowchart LR
+    I["Ảnh X-quang RGB · 224×224×3<br/>Chuẩn hóa ImageNet"]
+    subgraph B["Backbone EfficientViT-B1"]
+        direction TB
+        S01["Stem + stage 1<br/>112×112×16 → 56×56×32"] --> S2["Stage 2 · 3 MBConv<br/>28×28×64"]
+        S2 --> S3["Stage 3 · 3 khối EfficientViT<br/>14×14×128"]
+        S3 --> S4["Stage 4 · 4 khối EfficientViT<br/>7×7×256"]
+    end
+    subgraph H["Đầu phân vùng"]
+        direction TB
+        P["Chiếu 1×1 ở stage 2, 3, 4<br/>Nội suy theo hệ số 1×, 2×, 4×"] --> F["Cộng theo phần tử · 28×28×64"]
+        F --> M["3 MBConv có nối tắt"]
+        M --> L["Đầu mask 1×1 · logit 28×28×1"]
+    end
+    I --> B --> H --> O["Nội suy bilinear · sigmoid<br/>Mask 224×224 · ngưỡng 0,5"]
+```
+
+Stage 3 và 4 bắt đầu bằng một MBConv giảm độ phân giải. Các khối EfficientViT kết hợp chú ý tuyến tính đa tỉ lệ LiteMLA với MBConv. Đầu segmentation đưa đầu ra của stage 2–4 về cùng kích thước ở stride 8, cộng đặc trưng rồi dự đoán một logit vùng u tại mỗi vị trí. [Adapter của demo](demo/backend/models.py) · [Mã đầu segmentation tại commit đã ghim](https://github.com/mit-han-lab/efficientvit/blob/de7d7733cc0329f391b33f1f459271562ec27bd5/efficientvit/models/efficientvit/seg.py)
+
+### Cây thư mục
 
 ```text
 start-web.ps1      Launcher Windows
@@ -89,8 +140,6 @@ material/          Ảnh chụp và video demo
 paper/             Bài báo tham khảo
 tests/             Kiểm thử Python
 ```
-
-</details>
 
 ## Chạy nhanh
 
